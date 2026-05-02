@@ -9,6 +9,18 @@ const COLOR_MAP: Record<string, string> = {
   purple: '#a855f7',
 }
 
+// Generate hexagon SVG path for flat-top hexagon
+function getHexagonPath(size: number): string {
+  const points = []
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 180) * (60 * i)
+    const x = size / 2 + (size / 2) * Math.cos(angle)
+    const y = size / 2 + (size / 2) * Math.sin(angle)
+    points.push(`${x},${y}`)
+  }
+  return `M ${points.join(' L ')} Z`
+}
+
 interface PlayerRackProps {
   tiles: Tile[]
   selectedIndex: number | null
@@ -20,31 +32,57 @@ interface PlayerRackProps {
 }
 
 export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect, onFlip, isMyTurn, onSwap }: PlayerRackProps) {
+  const hexSize = 24
+  const hexHeight = hexSize * Math.sqrt(3) / 2
+  const tileWidth = hexSize + 2
+  const tileHeight = hexHeight * 2 + 2
+
   return (
-    <div className="flex items-center gap-3 justify-center flex-wrap">
-      <div className="flex gap-2 items-end">
+    <div className="flex portrait:flex-row landscape:flex-col items-center gap-3 justify-center portrait:flex-wrap landscape:flex-nowrap w-full">
+      <div className="flex portrait:flex-row landscape:flex-col gap-2 items-center portrait:items-end landscape:items-center">
         {tiles.map((tile, i) => {
           const isSelected = selectedIndex === i
           const displayA = isSelected && tileFlipped ? tile.colorB : tile.colorA
           const displayB = isSelected && tileFlipped ? tile.colorA : tile.colorB
+
           return (
             <button
               key={i}
               onClick={() => onSelect(selectedIndex === i ? null : i)}
               disabled={!isMyTurn}
-              className={`flex flex-col rounded-lg overflow-hidden border-2 transition-transform ${
+              className={`relative transition-transform ${
                 isSelected
-                  ? 'border-white scale-110 shadow-lg'
-                  : 'border-transparent hover:border-purple-400'
+                  ? 'scale-110'
+                  : ''
               } ${!isMyTurn ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-              style={{ width: 36 }}
+              style={{ width: tileWidth, height: tileHeight }}
+              title={`Tile: ${displayA} - ${displayB}`}
             >
-              <div
-                style={{ backgroundColor: COLOR_MAP[displayA], height: 20 }}
-              />
-              <div
-                style={{ backgroundColor: COLOR_MAP[displayB], height: 20 }}
-              />
+              <svg
+                width={tileWidth}
+                height={tileHeight}
+                viewBox={`0 0 ${hexSize} ${hexHeight * 2}`}
+                className="block"
+              >
+                {/* Top hexagon */}
+                <g transform={`translate(0, ${hexHeight / 2})`}>
+                  <path
+                    d={getHexagonPath(hexSize)}
+                    fill={COLOR_MAP[displayA]}
+                    stroke={isSelected ? '#ffffff' : '#312e6b'}
+                    strokeWidth={isSelected ? 2 : 1}
+                  />
+                </g>
+                {/* Bottom hexagon */}
+                <g transform={`translate(0, ${hexHeight * 1.5})`}>
+                  <path
+                    d={getHexagonPath(hexSize)}
+                    fill={COLOR_MAP[displayB]}
+                    stroke={isSelected ? '#ffffff' : '#312e6b'}
+                    strokeWidth={isSelected ? 2 : 1}
+                  />
+                </g>
+              </svg>
             </button>
           )
         })}
@@ -63,7 +101,7 @@ export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect
       {isMyTurn && (
         <button
           onClick={onSwap}
-          className="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition-colors ml-2"
+          className="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition-colors portrait:ml-2 landscape:ml-0"
           title="Swap rack (only if no tiles match lowest-scoring color)"
         >
           Swap

@@ -202,10 +202,25 @@ export default function GameScreen() {
         )
       })()}
 
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Board */}
-        <div className="flex-1 overflow-hidden flex items-center justify-center p-2">
+      {/* Main content - responsive layout based on orientation */}
+      {/* Portrait mode: Board on top (full width), Scoreboard below, Rack at bottom */}
+      {/* Landscape mode: Rack on left, Board in center (full height), Scoreboard on right */}
+      <div className="flex-1 overflow-hidden flex flex-col portrait:flex-col landscape:flex-row">
+        {/* Tile rack - bottom in portrait, left in landscape */}
+        <div className="order-3 portrait:order-3 landscape:order-1 bg-[#1a1833] border-t portrait:border-t landscape:border-t-0 landscape:border-r border-[#312e6b] p-3 portrait:p-3 landscape:p-2 landscape:w-32 landscape:flex landscape:items-center">
+          <PlayerRack
+            tiles={myRack}
+            selectedIndex={selectedTileIndex}
+            tileFlipped={tileFlipped}
+            onSelect={selectTile}
+            onFlip={flipTile}
+            isMyTurn={isMyTurn}
+            onSwap={handleSwapRack}
+          />
+        </div>
+
+        {/* Board - takes maximum space */}
+        <div className="order-1 portrait:order-1 landscape:order-2 flex-1 overflow-hidden flex items-center justify-center p-2">
           <HexBoard
             board={gameState?.board ?? {}}
             radius={gameState?.radius ?? 6}
@@ -219,8 +234,8 @@ export default function GameScreen() {
           />
         </div>
 
-        {/* Right panel */}
-        <div className="w-48 lg:w-64 flex flex-col gap-2 p-2 overflow-y-auto">
+        {/* Scoreboard - scrollable at bottom in portrait, right panel in landscape */}
+        <div className="order-2 portrait:order-2 landscape:order-3 portrait:max-h-32 landscape:w-48 landscape:lg:w-64 flex flex-col gap-2 p-2 overflow-y-auto portrait:border-t landscape:border-t-0 landscape:border-l border-[#312e6b]">
           <ScorePanel
             scores={gameState?.scores ?? {}}
             playerOrder={gameState?.playerOrder ?? []}
@@ -229,19 +244,6 @@ export default function GameScreen() {
             currentPlayerId={gameState?.currentPlayerId ?? ''}
           />
         </div>
-      </div>
-
-      {/* Bottom: player rack */}
-      <div className="bg-[#1a1833] border-t border-[#312e6b] p-3">
-        <PlayerRack
-          tiles={myRack}
-          selectedIndex={selectedTileIndex}
-          tileFlipped={tileFlipped}
-          onSelect={selectTile}
-          onFlip={flipTile}
-          isMyTurn={isMyTurn}
-          onSwap={handleSwapRack}
-        />
       </div>
 
       {gameOver && (

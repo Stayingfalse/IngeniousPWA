@@ -12,6 +12,7 @@ type Screen = 'home' | 'lobby' | 'game'
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
+  const [errorMessage, setErrorMessage] = useState<string>('')
   const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
@@ -25,6 +26,10 @@ export default function App() {
           msg.lobbyState,
           msg.seat,
         )
+        // Save lobby ID for auto-rejoin
+        localStorage.setItem('lastLobbyId', msg.lobbyState.id)
+        // Clear any error message on successful join
+        setErrorMessage('')
         // If a game is already in progress (mid-game reconnect), go straight to the game screen
         setScreen(msg.lobbyState.status === 'in_progress' ? 'game' : 'lobby')
         break
@@ -63,10 +68,21 @@ export default function App() {
 
       case 'GAME_OVER':
         setGameOver(msg.results)
+        // Clear saved lobby ID when game is over
+        localStorage.removeItem('lastLobbyId')
         break
 
       case 'ERROR':
         console.error('[WS Error]', msg.code, msg.message)
+        // Display error to user based on error code
+        if (msg.code === 'LOBBY_NOT_FOUND') {
+          setErrorMessage('Lobby not found. It may have been closed.')
+          localStorage.removeItem('lastLobbyId')
+        } else if (msg.code === 'GAME_ALREADY_STARTED') {
+          setErrorMessage('This game has already started and you are not a player. Spectating is not yet available.')
+        } else {
+          setErrorMessage(msg.message || 'An error occurred')
+        }
         break
     }
   }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver])
@@ -86,14 +102,27 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Auto re-join lobby/game when WebSocket reconnects
+  // Auto re-join lobby/game when WebSocket reconnects OR on initial mount if saved lobby exists
   const prevConnectedRef = useRef(false)
+  const hasAttemptedAutoRejoin = useRef(false)
   useEffect(() => {
     const wasDisconnected = !prevConnectedRef.current
     const nowConnected = connected
-    const shouldReconnect = nowConnected && wasDisconnected && !!lobbyId && screen !== 'home'
+
+    // Try to rejoin if: (reconnected AND have lobbyId) OR (first connect AND have saved lobby AND haven't tried yet)
+    const shouldReconnect = (nowConnected && wasDisconnected && !!lobbyId && screen !== 'home')
+      || (nowConnected && !hasAttemptedAutoRejoin.current && screen === 'home')
+
     if (shouldReconnect) {
-      wsClient.send({ type: 'JOIN_LOBBY', lobbyId, playerName: myPlayerName || 'Player' })
+      const savedLobbyId = localStorage.getItem('lastLobbyId')
+      const targetLobbyId = lobbyId || savedLobbyId
+
+      if (targetLobbyId) {
+        const savedName = localStorage.getItem('playerName')
+        const name = myPlayerName || savedName || 'Player'
+        wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
+        hasAttemptedAutoRejoin.current = true
+      }
     }
     prevConnectedRef.current = connected
   }, [connected, lobbyId, myPlayerName, screen])
@@ -105,7 +134,7 @@ export default function App() {
           Reconnecting…
         </div>
       )}
-      {screen === 'home' && <HomeScreen />}
+      {screen === 'home' && <HomeScreen globalError={errorMessage} />}
       {screen === 'lobby' && <LobbyScreen onNavigate={setScreen} />}
       {screen === 'game' && <GameScreen />}
     </div>
