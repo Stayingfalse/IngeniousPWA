@@ -82,7 +82,7 @@ export function checkWinCondition(state: GameState): string | null {
   return null
 }
 
-export function maskGameState(state: GameState, viewingPlayerId: string) {
+export function maskGameState(state: GameState, viewingPlayerId: string, turnDeadline: number | null = null) {
   const otherRackSizes: Record<string, number> = {}
   for (const pid of state.playerOrder) {
     if (pid !== viewingPlayerId) {
@@ -96,6 +96,7 @@ export function maskGameState(state: GameState, viewingPlayerId: string) {
     tileBagCount: tileBag.length,
     myRack: playerRacks[viewingPlayerId] ?? [],
     otherRackSizes,
+    turnDeadline,
   }
 }
 

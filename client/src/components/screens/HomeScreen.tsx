@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { wsClient } from '../../lib/wsClient'
 import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
@@ -9,7 +9,21 @@ export default function HomeScreen() {
   const [maxPlayers, setMaxPlayers] = useState(2)
   const [mode, setMode] = useState<'join' | 'create'>('join')
   const [error, setError] = useState('')
-  const { setMyPlayer, myPlayerName } = useLobbyStore()
+  const { myPlayerName } = useLobbyStore()
+
+  // Auto-fill lobby code from ?join=XXXXXX URL param
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const joinCode = params.get('join')
+    if (joinCode) {
+      setLobbyCode(joinCode.toUpperCase().slice(0, 6))
+      setMode('join')
+      // Clean the URL without reloading
+      const url = new URL(window.location.href)
+      url.searchParams.delete('join')
+      window.history.replaceState(null, '', url.toString())
+    }
+  }, [])
 
   const handleJoin = () => {
     const name = playerName.trim() || myPlayerName || 'Player'

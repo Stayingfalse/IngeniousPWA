@@ -26,11 +26,15 @@ import {
 import { gameResultQueries, lobbyQueries } from './database'
 import { v4 as uuidv4 } from 'uuid'
 
+const TURN_TIME_LIMIT_MS = 60_000 // 60 seconds per turn
+
 export class GameRoom {
   private state: GameState
   private connections: Map<string, WebSocket> = new Map()
   private startedAt: number = Date.now()
   private lobbyId: string
+  private turnTimer: ReturnType<typeof setTimeout> | null = null
+  private turnDeadline: number | null = null
 
   constructor(lobbyId: string, playerIds: string[]) {
     this.lobbyId = lobbyId
@@ -45,6 +49,7 @@ export class GameRoom {
     }
 
     this.state = initGameState(lobbyId, playerIds, initialRacks, remaining)
+    this.startTurnTimer()
   }
 
   addConnection(playerId: string, ws: WebSocket): void {
@@ -72,13 +77,13 @@ export class GameRoom {
 
   broadcastState(): void {
     for (const playerId of this.state.playerOrder) {
-      const masked = maskGameState(this.state, playerId)
+      const masked = maskGameState(this.state, playerId, this.turnDeadline)
       this.send(playerId, { type: 'STATE_UPDATE', state: masked })
     }
   }
 
   getMaskedState(playerId: string): MaskedGameState {
-    return maskGameState(this.state, playerId)
+    return maskGameState(this.state, playerId, this.turnDeadline)
   }
 
   handlePlaceTile(
@@ -106,6 +111,8 @@ export class GameRoom {
       return
     }
 
+    this.clearTurnTimer()
+
     const { newState, ingenious } = result
     this.state = newState
 
@@ -124,6 +131,7 @@ export class GameRoom {
     // If bonus turns owed, player keeps their turn
     if (this.state.bonusTurnsOwed > 0) {
       this.state = { ...this.state, bonusTurnsOwed: this.state.bonusTurnsOwed - 1 }
+      this.startTurnTimer()
       this.refillAndBroadcast(playerId, false)
       return
     }
@@ -153,6 +161,8 @@ export class GameRoom {
       return
     }
 
+    this.clearTurnTimer()
+
     // Return rack to bag and draw 6 new tiles
     let bag = [...this.state.tileBag, ...rack]
     for (let i = bag.length - 1; i > 0; i--) {
@@ -170,6 +180,7 @@ export class GameRoom {
 
     this.send(playerId, { type: 'YOUR_NEW_RACK', rack: drawn })
     this.advanceTurn(playerId)
+    this.startTurnTimer()
     this.broadcastState()
   }
 
@@ -196,6 +207,9 @@ export class GameRoom {
 
     // Check if new current player has any legal moves
     this.checkForNoMoves()
+    if (this.state.status === 'in_progress') {
+      this.startTurnTimer()
+    }
     this.broadcastState()
   }
 
@@ -223,7 +237,36 @@ export class GameRoom {
     }
   }
 
+  private startTurnTimer(): void {
+    this.clearTurnTimer()
+    this.turnDeadline = Date.now() + TURN_TIME_LIMIT_MS
+    this.turnTimer = setTimeout(() => {
+      this.handleTurnTimeout()
+    }, TURN_TIME_LIMIT_MS)
+  }
+
+  private clearTurnTimer(): void {
+    if (this.turnTimer !== null) {
+      clearTimeout(this.turnTimer)
+      this.turnTimer = null
+    }
+    this.turnDeadline = null
+  }
+
+  private handleTurnTimeout(): void {
+    if (this.state.status !== 'in_progress') return
+
+    const timedOutPlayer = this.state.currentPlayerId
+    this.advanceTurn(timedOutPlayer)
+    this.checkForNoMoves()
+    if (this.state.status === 'in_progress') {
+      this.startTurnTimer()
+    }
+    this.broadcastState()
+  }
+
   private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves'): void {
+    this.clearTurnTimer()
     this.state = { ...this.state, status: 'finished', winner }
 
     const results: GameResults = {

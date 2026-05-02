@@ -25,6 +25,7 @@ export type MaskedGameState = Omit<GameState, 'tileBag' | 'playerRacks'> & {
   tileBagCount: number
   myRack: Tile[]
   otherRackSizes: Record<string, number>
+  turnDeadline: number | null
 }
 
 export type PlayerInfo = {
@@ -52,6 +53,7 @@ export type ClientMessage =
   | { type: 'START_GAME' }
   | { type: 'PLACE_TILE'; tileIndex: number; hexA: AxialCoord; hexB: AxialCoord }
   | { type: 'SWAP_RACK' }
+  | { type: 'CHANGE_NAME'; name: string }
   | { type: 'REQUEST_SYNC' }
   | { type: 'PING' }
 
@@ -59,6 +61,7 @@ export type ServerMessage =
   | { type: 'JOINED'; playerId: string; seat: number; lobbyState: LobbyState }
   | { type: 'PLAYER_JOINED'; player: PlayerInfo }
   | { type: 'PLAYER_LEFT'; playerId: string }
+  | { type: 'PLAYER_NAME_CHANGED'; playerId: string; name: string }
   | { type: 'GAME_STARTED'; state: MaskedGameState }
   | { type: 'STATE_UPDATE'; state: MaskedGameState }
   | { type: 'INGENIOUS'; playerId: string; color: Color }

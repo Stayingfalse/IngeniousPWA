@@ -171,7 +171,11 @@ ingenious/
 - [x] Installable PWA (manifest + Workbox service worker)
 - [x] Dark purple theme with Tailwind CSS
 - [x] Copy lobby code to clipboard button (one-click copy with "Copied!" feedback)
-- [x] Player name change in-lobby (pencil-icon inline edit, persisted via `PUT /api/player/name`)
+- [x] Player name change in-lobby (pencil-icon inline edit, persisted via `PUT /api/player/name`, broadcasts live via `CHANGE_NAME` WebSocket message)
+- [x] Direct-join shareable URL (`?join=LOBBY_CODE` auto-fills code and switches to Join mode)
+- [x] Tile flip button in rack (↻ Flip swaps colour assignment; ghost preview reflects orientation)
+- [x] Rack swap eligibility prompt (banner appears automatically when it is your turn and your rack contains no lowest-colour tile)
+- [x] Turn timer (60 s per turn shown in header; server auto-advances turn on timeout)
 
 #### Infrastructure
 - [x] Single-container deployment (no external services)
@@ -196,20 +200,20 @@ ingenious/
 ### 🚧 Work In Progress / Known Gaps
 
 #### Game Rules
-- [ ] Rack swap eligibility prompt shown to player before turn automatically ends
+- [x] Rack swap eligibility prompt shown to player before turn automatically ends
 - [ ] Spectator/observer mode (watch a game without playing)
 
 #### Frontend Polish
-- [ ] Tile rotation / orientation selection before placement (currently tile orientation is fixed by hex selection order)
+- [x] Tile rotation / orientation selection before placement (Flip button swaps which hex receives each tile colour; ghost preview updates accordingly)
 - [ ] Animated score increments
 - [ ] Mobile touch drag-to-place support (board is currently click-only)
 - [ ] Sound effects / audio feedback
 - [ ] Responsive layout optimisation for small screens in landscape
-- [ ] Direct-join shareable URL (e.g. `?join=LOBBY_CODE` auto-fills the lobby code so players can click a link to join)
+- [x] Direct-join shareable URL (e.g. `?join=LOBBY_CODE` auto-fills the lobby code so players can click a link to join; lobby screen also has a "Copy invite link" button)
 
 #### Multiplayer
-- [ ] Turn timer / time limit per turn to prevent stalled games
-- [ ] Broadcast player name changes to all lobby members in real time (currently updated in DB only)
+- [x] Turn timer / time limit per turn to prevent stalled games (60 s countdown visible in header; turn auto-advances on timeout)
+- [x] Broadcast player name changes to all lobby members in real time (via `CHANGE_NAME` WebSocket message)
 
 #### Infrastructure & Quality
 - [ ] Unit tests for server routes and WebSocket handlers

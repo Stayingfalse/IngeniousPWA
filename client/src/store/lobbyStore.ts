@@ -12,6 +12,7 @@ interface LobbyStore {
   updateLobbyState: (state: LobbyState) => void
   playerJoined: (player: PlayerInfo) => void
   playerLeft: (playerId: string) => void
+  playerNameChanged: (playerId: string, name: string) => void
   reset: () => void
 }
 
@@ -49,6 +50,20 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
         lobbyState: {
           ...s.lobbyState,
           players: s.lobbyState.players.filter(p => p.id !== playerId),
+        },
+      }
+    }),
+
+  playerNameChanged: (playerId, name) =>
+    set(s => {
+      if (!s.lobbyState) return s
+      return {
+        myPlayerName: s.myPlayerId === playerId ? name : s.myPlayerName,
+        lobbyState: {
+          ...s.lobbyState,
+          players: s.lobbyState.players.map(p =>
+            p.id === playerId ? { ...p, name } : p
+          ),
         },
       }
     }),

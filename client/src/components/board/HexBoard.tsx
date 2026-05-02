@@ -18,6 +18,7 @@ interface HexBoardProps {
   radius: number
   myRack: Tile[]
   selectedTileIndex: number | null
+  tileFlipped: boolean
   isMyTurn: boolean
   isFirstMove: boolean
   usedStartSymbols: string[]
@@ -29,6 +30,7 @@ export default function HexBoard({
   radius,
   myRack,
   selectedTileIndex,
+  tileFlipped,
   isMyTurn,
   isFirstMove,
   usedStartSymbols,
@@ -139,7 +141,7 @@ export default function HexBoard({
             x={ax}
             y={ay}
             size={HEX_SIZE - 1}
-            color={selectedTile.colorA}
+            color={tileFlipped ? selectedTile.colorB : selectedTile.colorA}
           />
         )
       })()}
@@ -150,7 +152,7 @@ export default function HexBoard({
             x={bx}
             y={by}
             size={HEX_SIZE - 1}
-            color={selectedTile.colorB}
+            color={tileFlipped ? selectedTile.colorA : selectedTile.colorB}
           />
         )
       })()}

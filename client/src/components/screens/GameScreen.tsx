@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import { useLobbyStore } from '../../store/lobbyStore'
 import HexBoard from '../board/HexBoard'
@@ -7,33 +8,93 @@ import TurnIndicator from '../ui/TurnIndicator'
 import GameOverModal from '../ui/GameOverModal'
 import IngeniousBanner from '../ui/IngeniousBanner'
 import { wsClient } from '../../lib/wsClient'
-import type { AxialCoord } from '@ingenious/shared'
+import type { AxialCoord, Color } from '@ingenious/shared'
+import { findMinColor } from '@ingenious/shared'
+
+const COLOR_LABELS: Record<Color, string> = {
+  red: 'Red', orange: 'Orange', yellow: 'Yellow',
+  green: 'Green', blue: 'Blue', purple: 'Purple',
+}
 
 export default function GameScreen() {
-  const { gameState, myRack, selectedTileIndex, selectTile, gameOver } = useGameStore()
+  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver } = useGameStore()
   const { myPlayerId, lobbyState } = useLobbyStore()
 
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
   const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
   const usedStartSymbols = gameState?.usedStartSymbols ?? []
 
-  const handleHexClick = (coord: AxialCoord) => {
+  // ── Feature 3: Rack-swap eligibility prompt ──────────────────────────────
+  const [showSwapPrompt, setShowSwapPrompt] = useState(false)
+  const swapPromptShownForTurn = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!isMyTurn || !myPlayerId || !gameState) {
+      setShowSwapPrompt(false)
+      return
+    }
+    // Only show once per turn (keyed by moveCount so bonus turns re-check)
+    const turnKey = `${myPlayerId}-${gameState.moveCount}`
+    if (swapPromptShownForTurn.current === turnKey) return
+    swapPromptShownForTurn.current = turnKey
+
+    const scores = gameState.scores[myPlayerId]
+    if (!scores) return
+    const minColor = findMinColor(scores)
+    const hasMinColor = myRack.some(t => t.colorA === minColor || t.colorB === minColor)
+    if (!hasMinColor && myRack.length > 0) {
+      setShowSwapPrompt(true)
+    }
+  }, [isMyTurn, myPlayerId, gameState, myRack])
+
+  // ── Feature 5: Turn countdown ─────────────────────────────────────────────
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!gameState?.turnDeadline) {
+      setSecondsLeft(null)
+      return
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.round((gameState.turnDeadline! - Date.now()) / 1000))
+      setSecondsLeft(remaining)
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [gameState?.turnDeadline])
+
+  const handleHexClick = (_coord: AxialCoord) => {
     if (!isMyTurn || selectedTileIndex === null) return
-    // TileGhost/HexBoard handles pair selection
   }
 
   const handleTilePlaced = (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => {
-    wsClient.send({ type: 'PLACE_TILE', tileIndex, hexA, hexB })
+    // Feature 4: swap hex order when tile is flipped
+    const [a, b] = tileFlipped ? [hexB, hexA] : [hexA, hexB]
+    wsClient.send({ type: 'PLACE_TILE', tileIndex, hexA: a, hexB: b })
     selectTile(null)
+    setShowSwapPrompt(false)
   }
 
   const handleSwapRack = () => {
     wsClient.send({ type: 'SWAP_RACK' })
+    setShowSwapPrompt(false)
+  }
+
+  const handleDeclineSwap = () => {
+    setShowSwapPrompt(false)
   }
 
   const playerNames = Object.fromEntries(
     lobbyState?.players.map(p => [p.id, p.name]) ?? []
   )
+
+  // Determine countdown color
+  const timerColor = secondsLeft !== null && secondsLeft <= 10
+    ? 'text-red-400'
+    : secondsLeft !== null && secondsLeft <= 20
+      ? 'text-yellow-400'
+      : 'text-gray-400'
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -45,10 +106,42 @@ export default function GameScreen() {
           myPlayerId={myPlayerId ?? ''}
           playerNames={playerNames}
         />
-        <div className="text-xs text-gray-400">
-          {gameState?.tileBagCount ?? 0} tiles left
+        <div className="flex items-center gap-3 text-xs text-gray-400">
+          {secondsLeft !== null && (
+            <span className={`font-mono font-bold ${timerColor}`} title="Time left for this turn">
+              {secondsLeft}s
+            </span>
+          )}
+          <span>{gameState?.tileBagCount ?? 0} tiles left</span>
         </div>
       </div>
+
+      {/* Feature 3: Swap eligibility prompt */}
+      {showSwapPrompt && (() => {
+        const scores = gameState?.scores[myPlayerId ?? '']
+        const minColor = scores ? findMinColor(scores) : null
+        return (
+          <div className="bg-amber-900/80 border-b border-amber-600 px-4 py-2 flex items-center justify-between gap-3 text-sm">
+            <span className="text-amber-200">
+              Your rack has no <strong>{minColor ? COLOR_LABELS[minColor] : ''}</strong> tiles (your lowest colour). You may swap your rack.
+            </span>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={handleSwapRack}
+                className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs font-medium"
+              >
+                Swap Rack
+              </button>
+              <button
+                onClick={handleDeclineSwap}
+                className="text-amber-300 hover:text-white px-2 py-1 text-xs"
+              >
+                Keep &amp; Play
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
@@ -59,6 +152,7 @@ export default function GameScreen() {
             radius={gameState?.radius ?? 6}
             myRack={myRack}
             selectedTileIndex={selectedTileIndex}
+            tileFlipped={tileFlipped}
             isMyTurn={isMyTurn}
             isFirstMove={isFirstMove}
             usedStartSymbols={usedStartSymbols}
@@ -83,7 +177,9 @@ export default function GameScreen() {
         <PlayerRack
           tiles={myRack}
           selectedIndex={selectedTileIndex}
+          tileFlipped={tileFlipped}
           onSelect={selectTile}
+          onFlip={flipTile}
           isMyTurn={isMyTurn}
           onSwap={handleSwapRack}
         />
