@@ -81,19 +81,6 @@ export default function HexCell({
         stroke={stroke}
         strokeWidth={isFirstSelected || isValidTarget ? 2 : 1}
       />
-      {isStart && !color && (
-        <text
-          x={x}
-          y={y}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={size * 0.5}
-          fill="#6b5e9e"
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          ★
-        </text>
-      )}
     </g>
   )
 }

@@ -301,10 +301,18 @@ export function initGameState(
     scores[pid] = emptyScores()
   }
 
+  // Initialize start symbols with random colors
+  const board: Record<string, Color> = {}
+  const startSymbols = startSymbolPositions(radius)
+  for (const sym of startSymbols) {
+    const randomColor = COLORS[Math.floor(Math.random() * COLORS.length)]
+    board[key(sym)] = randomColor
+  }
+
   return {
     lobbyId,
     status: 'in_progress',
-    board: {},
+    board,
     tileBag,
     playerRacks: initialRacks,
     scores,

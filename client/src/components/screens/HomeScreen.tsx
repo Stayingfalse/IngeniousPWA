@@ -11,7 +11,8 @@ const TIMER_PRESETS: { label: string; seconds: number }[] = [
   { label: '5 min', seconds: 300 },
 ]
 
-export default function HomeScreen() {
+export default function HomeScreen({ globalError }: { globalError?: string }) {
+  const { myPlayerName } = useLobbyStore()
   const [playerName, setPlayerName] = useState('')
   const [lobbyCode, setLobbyCode] = useState('')
   const [maxPlayers, setMaxPlayers] = useState(2)
@@ -19,7 +20,23 @@ export default function HomeScreen() {
   const [turnMode, setTurnMode] = useState<TurnMode>('realtime')
   const [turnLimitSeconds, setTurnLimitSeconds] = useState<number>(60)
   const [error, setError] = useState('')
-  const { myPlayerName } = useLobbyStore()
+
+  // Display global error if provided
+  useEffect(() => {
+    if (globalError) {
+      setError(globalError)
+    }
+  }, [globalError])
+
+  // Load player name from localStorage on mount
+  useEffect(() => {
+    const savedName = localStorage.getItem('playerName')
+    if (savedName && !playerName) {
+      setPlayerName(savedName)
+    } else if (myPlayerName && !playerName) {
+      setPlayerName(myPlayerName)
+    }
+  }, [myPlayerName, playerName])
 
   // Auto-fill lobby code from ?join=XXXXXX URL param
   useEffect(() => {
@@ -42,6 +59,8 @@ export default function HomeScreen() {
       return
     }
     setError('')
+    // Save name to localStorage
+    localStorage.setItem('playerName', name)
     wsClient.send({
       type: 'JOIN_LOBBY',
       lobbyId: lobbyCode.toUpperCase().trim(),
@@ -52,6 +71,8 @@ export default function HomeScreen() {
   const handleCreate = async () => {
     const name = playerName.trim() || myPlayerName || 'Player'
     setError('')
+    // Save name to localStorage
+    localStorage.setItem('playerName', name)
 
     try {
       const res = await fetch('/api/lobbies', {
