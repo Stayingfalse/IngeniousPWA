@@ -63,7 +63,12 @@ export default function GameScreen() {
       return
     }
     const update = () => {
-      const remaining = Math.max(0, Math.round((gameState.turnDeadline! - Date.now()) / 1000))
+      const deadline = gameState?.turnDeadline
+      if (deadline === null || deadline === undefined) {
+        setSecondsLeft(null)
+        return
+      }
+      const remaining = Math.max(0, Math.round((deadline - Date.now()) / 1000))
       setSecondsLeft(remaining)
     }
     update()
@@ -190,7 +195,7 @@ export default function GameScreen() {
                 onClick={handleDeclineSwap}
                 className="text-amber-300 hover:text-white px-2 py-1 text-xs"
               >
-                Keep &amp; Play
+                Keep & Play
               </button>
             </div>
           </div>

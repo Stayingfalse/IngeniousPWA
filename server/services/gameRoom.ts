@@ -39,7 +39,7 @@ function sendPushNotification(
       sendNotification(sub: object, payload: string): Promise<void>
     }
     webpush.setVapidDetails(
-      'mailto:ingenious@example.com',
+      process.env.VAPID_SUBJECT || 'mailto:ingenious@example.com',
       vapidKeys.publicKey,
       vapidKeys.privateKey,
     )
