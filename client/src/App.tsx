@@ -17,8 +17,9 @@ export default function App() {
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
-      case 'JOINED':
-        setMyPlayer(msg.playerId, '')
+      case 'JOINED': {
+        const joinedName = msg.lobbyState.players.find(p => p.id === msg.playerId)?.name ?? ''
+        setMyPlayer(msg.playerId, joinedName)
         setLobby(
           msg.lobbyState.id,
           msg.lobbyState,
@@ -27,6 +28,7 @@ export default function App() {
         // If a game is already in progress (mid-game reconnect), go straight to the game screen
         setScreen(msg.lobbyState.status === 'in_progress' ? 'game' : 'lobby')
         break
+      }
 
       case 'PLAYER_JOINED':
         playerJoined(msg.player)
@@ -70,6 +72,19 @@ export default function App() {
   }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver])
 
   const { connected } = useWebSocket(handleMessage)
+
+  // Ensure player_token cookie is established on mount so HTTP API calls succeed
+  useEffect(() => {
+    fetch('/api/auth', { method: 'POST', credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then((data: { playerId?: string; playerName?: string } | null) => {
+        if (data?.playerId && data.playerName !== undefined) {
+          setMyPlayer(data.playerId, data.playerName)
+        }
+      })
+      .catch((err) => console.warn('[Auth] Initialization failed:', err))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Auto re-join lobby/game when WebSocket reconnects
   const prevConnectedRef = useRef(false)
