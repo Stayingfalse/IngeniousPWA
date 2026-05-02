@@ -5,8 +5,10 @@ import { lobbyManager } from '../services/lobbyManager'
 import db from '../services/database'
 
 export default async function apiRoutes(fastify: FastifyInstance) {
-  // Get or create player from token
-  fastify.post('/api/auth', async (request, reply) => {
+  // Get or create player from token (10 requests per minute per IP)
+  fastify.post('/api/auth', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const token = (request.cookies as Record<string, string | undefined>)['player_token']
 
     if (token) {
@@ -33,8 +35,10 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     return reply.send({ playerId, playerName: defaultName })
   })
 
-  // Update player name
-  fastify.put('/api/player/name', async (request, reply) => {
+  // Update player name (20 requests per minute per IP)
+  fastify.put('/api/player/name', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const token = (request.cookies as Record<string, string | undefined>)['player_token']
     if (!token) return reply.status(401).send({ error: 'Unauthorized' })
 
@@ -51,8 +55,10 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     return reply.send({ playerName: name })
   })
 
-  // Create lobby
-  fastify.post('/api/lobbies', async (request, reply) => {
+  // Create lobby (5 per minute per IP to prevent spam)
+  fastify.post('/api/lobbies', {
+    config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const token = (request.cookies as Record<string, string | undefined>)['player_token']
     if (!token) return reply.status(401).send({ error: 'Unauthorized' })
 
@@ -67,8 +73,10 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers })
   })
 
-  // Get lobby info
-  fastify.get('/api/lobbies/:id', async (request, reply) => {
+  // Get lobby info (60 per minute per IP)
+  fastify.get('/api/lobbies/:id', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const lobby = lobbyManager.getLobby(id)
     if (!lobby) return reply.status(404).send({ error: 'Lobby not found' })
@@ -89,8 +97,10 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     }
   })
 
-  // Game history
-  fastify.get('/api/history', async (_request, reply) => {
+  // Game history (30 per minute per IP)
+  fastify.get('/api/history', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (_request, reply) => {
     const rows = gameResultQueries.findRecent.all()
     const results = rows.map(r => {
       let scores: Record<string, Record<string, number>> = {}

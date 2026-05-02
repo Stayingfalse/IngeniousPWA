@@ -170,6 +170,8 @@ ingenious/
 - [x] Swap Rack button (shown on player's turn)
 - [x] Installable PWA (manifest + Workbox service worker)
 - [x] Dark purple theme with Tailwind CSS
+- [x] Copy lobby code to clipboard button (one-click copy with "Copied!" feedback)
+- [x] Player name change in-lobby (pencil-icon inline edit, persisted via `PUT /api/player/name`)
 
 #### Infrastructure
 - [x] Single-container deployment (no external services)
@@ -180,9 +182,14 @@ ingenious/
 - [x] Production-ready health-check endpoint (`GET /health`)
 - [x] Lobby expiry: idle waiting lobbies cleaned up after 1 hour; idle in-progress lobbies after 24 hours
 - [x] Game history / past results browser (`GET /api/history` — last 20 games with winner name and scores)
+- [x] CI pipeline (GitHub Actions) — build all packages + run shared tests on push/PR
+- [x] Rate limiting on REST endpoints (per-route limits via `@fastify/rate-limit`)
 
 #### Game Correctness
 - [x] Full end-of-game detection: skips players with no legal moves; game only ends when **all** players are out of moves
+
+#### Multiplayer
+- [x] Reconnect mid-game: client auto-rejoins lobby on WS reconnect and navigates back to the game screen; server re-sends masked game state including player's own rack
 
 ---
 
@@ -198,15 +205,13 @@ ingenious/
 - [ ] Mobile touch drag-to-place support (board is currently click-only)
 - [ ] Sound effects / audio feedback
 - [ ] Responsive layout optimisation for small screens in landscape
-- [ ] Copy lobby code to clipboard button
+- [ ] Direct-join shareable URL (e.g. `?join=LOBBY_CODE` auto-fills the lobby code so players can click a link to join)
 
 #### Multiplayer
-- [ ] Reconnect mid-game: re-sync full game state to rejoining player
 - [ ] Turn timer / time limit per turn to prevent stalled games
+- [ ] Broadcast player name changes to all lobby members in real time (currently updated in DB only)
 
 #### Infrastructure & Quality
 - [ ] Unit tests for server routes and WebSocket handlers
 - [ ] Integration / end-to-end tests
-- [ ] CI pipeline (GitHub Actions)
-- [ ] Player name change in-lobby
-- [ ] Rate limiting on REST and WS endpoints
+- [ ] Player statistics / leaderboard page (win rates per player using the existing `/api/history` data)
