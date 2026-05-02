@@ -123,7 +123,6 @@ export default function HexBoard({
             y={ay}
             size={HEX_SIZE - 1}
             color={selectedTile.colorA}
-            isFirst={true}
           />
         )
       })()}
@@ -135,7 +134,6 @@ export default function HexBoard({
             y={by}
             size={HEX_SIZE - 1}
             color={selectedTile.colorB}
-            isFirst={false}
           />
         )
       })()}

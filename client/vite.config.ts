@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@ingenious/shared': path.resolve(__dirname, '../shared/index.ts'),
+    },
+  },
   plugins: [
     react(),
     VitePWA({

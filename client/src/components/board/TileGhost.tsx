@@ -25,7 +25,6 @@ interface TileGhostProps {
   y: number
   size: number
   color: Color
-  isFirst: boolean
 }
 
 export default function TileGhost({ x, y, size, color }: TileGhostProps) {

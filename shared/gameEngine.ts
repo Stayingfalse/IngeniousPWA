@@ -238,7 +238,7 @@ export function finalizeTurn(
   return newState
 }
 
-function findMinColor(scores: Record<Color, number>): Color {
+export function findMinColor(scores: Record<Color, number>): Color {
   let minColor: Color = 'red'
   let minVal = Infinity
   for (const color of COLORS) {

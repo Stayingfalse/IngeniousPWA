@@ -16,6 +16,7 @@ import {
   maskGameState,
   hasLegalMove,
   initGameState,
+  findMinColor,
   COLORS,
   createTileBag,
   drawTiles,
@@ -24,18 +25,6 @@ import {
 } from '@ingenious/shared'
 import { gameResultQueries, lobbyQueries } from './database'
 import { v4 as uuidv4 } from 'uuid'
-
-function findMinColor(scores: Record<Color, number>): Color {
-  let minColor: Color = 'red'
-  let minVal = Infinity
-  for (const color of COLORS) {
-    if ((scores[color] ?? 0) < minVal) {
-      minVal = scores[color] ?? 0
-      minColor = color
-    }
-  }
-  return minColor
-}
 
 export class GameRoom {
   private state: GameState
