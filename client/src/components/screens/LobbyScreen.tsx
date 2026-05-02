@@ -9,8 +9,9 @@ interface LobbyScreenProps {
 }
 
 export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
-  const { lobbyState, lobbyId, myPlayerId, myPlayerName, setMyPlayer } = useLobbyStore()
+  const { lobbyState, lobbyId, myPlayerId, myPlayerName } = useLobbyStore()
   const [copied, setCopied] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [nameError, setNameError] = useState('')
@@ -34,6 +35,18 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
       setTimeout(() => setCopied(false), 2000)
     } catch {
       // Fallback: select text if clipboard API not available
+    }
+  }
+
+  const handleCopyInviteLink = async () => {
+    if (!lobbyId) return
+    try {
+      const url = `${location.origin}/?join=${lobbyId}`
+      await navigator.clipboard.writeText(url)
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2000)
+    } catch {
+      // Fallback silently
     }
   }
 
@@ -61,7 +74,8 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
         setNameError(data.error || 'Failed to update name')
         return
       }
-      if (myPlayerId) setMyPlayer(myPlayerId, trimmed)
+      // Broadcast name change to all lobby members via WebSocket
+      wsClient.send({ type: 'CHANGE_NAME', name: trimmed })
       setEditingName(false)
     } catch {
       setNameError('Network error')
@@ -93,7 +107,34 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
             )}
           </button>
         </div>
-        <p className="text-gray-500 text-xs mt-1">Share this code with friends</p>
+        {/* Game mode badge */}
+        {lobbyState && (
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              lobbyState.turnMode === 'async'
+                ? 'bg-blue-900/60 text-blue-300'
+                : 'bg-purple-900/60 text-purple-300'
+            }`}>
+              {lobbyState.turnMode === 'async'
+                ? '☁ Turn-based'
+                : lobbyState.turnLimitSeconds !== null
+                  ? `⚡ Real-time · ${lobbyState.turnLimitSeconds >= 60 ? `${lobbyState.turnLimitSeconds / 60} min` : `${lobbyState.turnLimitSeconds} s`} / turn`
+                  : '⚡ Real-time'}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-center gap-2 mt-1">
+          <button
+            onClick={handleCopyInviteLink}
+            title="Copy invite link"
+            className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            {copiedLink ? <span className="text-green-400">Link copied!</span> : 'Copy invite link'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm shadow-xl border border-[#312e6b]">

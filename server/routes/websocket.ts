@@ -130,6 +130,33 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           break
         }
 
+        case 'CHANGE_NAME': {
+          if (!playerId || !currentLobbyId) {
+            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            return
+          }
+
+          const name = msg.name?.trim()
+          if (!name || name.length < 1 || name.length > 20) {
+            send({ type: 'ERROR', code: 'INVALID_NAME', message: 'Name must be 1-20 characters' })
+            return
+          }
+
+          // Update DB
+          playerQueries.updateName.run(name, playerId)
+
+          // Update in-memory lobby player name
+          const nameLobby = lobbyManager.getLobby(currentLobbyId)
+          if (nameLobby) {
+            const player = nameLobby.players.find(p => p.id === playerId)
+            if (player) player.name = name
+            // Broadcast name change to all lobby members
+            nameLobby.broadcast({ type: 'PLAYER_NAME_CHANGED', playerId, name })
+            send({ type: 'PLAYER_NAME_CHANGED', playerId, name })
+          }
+          break
+        }
+
         case 'REQUEST_SYNC': {
           if (!playerId || !currentLobbyId) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })

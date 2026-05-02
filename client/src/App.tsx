@@ -12,7 +12,7 @@ type Screen = 'home' | 'lobby' | 'game'
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, lobbyId, myPlayerName } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -34,6 +34,10 @@ export default function App() {
 
       case 'PLAYER_LEFT':
         playerLeft(msg.playerId)
+        break
+
+      case 'PLAYER_NAME_CHANGED':
+        playerNameChanged(msg.playerId, msg.name)
         break
 
       case 'GAME_STARTED':
@@ -63,7 +67,7 @@ export default function App() {
         console.error('[WS Error]', msg.code, msg.message)
         break
     }
-  }, [setMyPlayer, setLobby, playerJoined, playerLeft, setGameState, setMyRack, setIngenious, setGameOver])
+  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver])
 
   const { connected } = useWebSocket(handleMessage)
 

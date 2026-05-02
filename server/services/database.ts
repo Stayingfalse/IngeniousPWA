@@ -49,7 +49,60 @@ db.exec(`
     duration_seconds INTEGER,
     finished_at INTEGER DEFAULT (unixepoch())
   );
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    player_id TEXT PRIMARY KEY,
+    endpoint TEXT NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    updated_at INTEGER DEFAULT (unixepoch())
+  );
 `)
+
+// ── VAPID keys ──────────────────────────────────────────────────────────────
+// Loaded lazily so the rest of the app works even if web-push is not yet
+// installed. Keys are auto-generated on first run and persisted to disk.
+
+export interface VapidKeys {
+  publicKey: string
+  privateKey: string
+}
+
+const VAPID_KEY_FILE = path.join(path.dirname(DB_PATH), 'vapid-keys.json')
+
+function loadOrGenerateVapidKeys(): VapidKeys {
+  // Prefer explicit env vars (useful in Docker)
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    return {
+      publicKey: process.env.VAPID_PUBLIC_KEY,
+      privateKey: process.env.VAPID_PRIVATE_KEY,
+    }
+  }
+
+  if (fs.existsSync(VAPID_KEY_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(VAPID_KEY_FILE, 'utf8')) as VapidKeys
+    } catch {
+      // Fall through to regenerate
+    }
+  }
+
+  // Auto-generate via web-push
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const webpush = require('web-push') as { generateVAPIDKeys(): VapidKeys }
+    const keys = webpush.generateVAPIDKeys()
+    fs.writeFileSync(VAPID_KEY_FILE, JSON.stringify(keys, null, 2))
+    return keys
+  } catch {
+    // web-push not installed or generation failed — push notifications disabled
+    return { publicKey: '', privateKey: '' }
+  }
+}
+
+export const vapidKeys: VapidKeys = loadOrGenerateVapidKeys()
+
+// ── Row types ────────────────────────────────────────────────────────────────
 
 export interface PlayerRow {
   id: string
@@ -73,6 +126,16 @@ export interface LobbyPlayerRow {
   player_id: string
   seat_index: number
 }
+
+export interface PushSubscriptionRow {
+  player_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  updated_at: number
+}
+
+// ── Prepared queries ─────────────────────────────────────────────────────────
 
 export const playerQueries = {
   findByToken: db.prepare<[string], PlayerRow>('SELECT * FROM players WHERE token = ?'),
@@ -118,6 +181,18 @@ export const gameResultQueries = {
      ORDER BY gr.finished_at DESC
      LIMIT 20`,
   ),
+}
+
+export const pushSubscriptionQueries = {
+  upsert: db.prepare(
+    `INSERT INTO push_subscriptions (player_id, endpoint, p256dh, auth, updated_at)
+     VALUES (?, ?, ?, ?, unixepoch())
+     ON CONFLICT(player_id) DO UPDATE SET endpoint=excluded.endpoint, p256dh=excluded.p256dh, auth=excluded.auth, updated_at=unixepoch()`,
+  ),
+  findByPlayer: db.prepare<[string], PushSubscriptionRow>(
+    'SELECT * FROM push_subscriptions WHERE player_id = ?',
+  ),
+  delete: db.prepare('DELETE FROM push_subscriptions WHERE player_id = ?'),
 }
 
 export default db
