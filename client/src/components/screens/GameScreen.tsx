@@ -134,7 +134,7 @@ export default function GameScreen() {
       : 'text-gray-400'
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-dvh overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#1a1833] border-b border-[#312e6b]">
         <IngeniousBanner small />
@@ -205,9 +205,9 @@ export default function GameScreen() {
       {/* Main content - responsive layout based on orientation */}
       {/* Portrait mode: Board on top (full width), Scoreboard below, Rack at bottom */}
       {/* Landscape mode: Rack on left, Board in center (full height), Scoreboard on right */}
-      <div className="flex-1 overflow-hidden flex flex-col portrait:flex-col landscape:flex-row">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col portrait:flex-col landscape:flex-row">
         {/* Tile rack - bottom in portrait, left in landscape */}
-        <div className="order-3 portrait:order-3 landscape:order-1 bg-[#1a1833] border-t portrait:border-t landscape:border-t-0 landscape:border-r border-[#312e6b] p-3 portrait:p-3 landscape:p-2 landscape:w-32 landscape:flex landscape:items-center">
+        <div className="order-3 portrait:order-3 landscape:order-1 bg-[#1a1833] border-t portrait:border-t landscape:border-t-0 landscape:border-r border-[#312e6b] portrait:p-2 landscape:p-2 landscape:w-32 landscape:flex landscape:items-center">
           <PlayerRack
             tiles={myRack}
             selectedIndex={selectedTileIndex}
@@ -220,7 +220,7 @@ export default function GameScreen() {
         </div>
 
         {/* Board - takes maximum space */}
-        <div className="order-1 portrait:order-1 landscape:order-2 flex-1 overflow-hidden flex items-center justify-center p-2">
+        <div className="order-1 portrait:order-1 landscape:order-2 flex-1 min-h-0 overflow-hidden flex items-center justify-center portrait:p-1 landscape:p-2">
           <HexBoard
             board={gameState?.board ?? {}}
             radius={gameState?.radius ?? 6}
@@ -234,8 +234,8 @@ export default function GameScreen() {
           />
         </div>
 
-        {/* Scoreboard - scrollable at bottom in portrait, right panel in landscape */}
-        <div className="order-2 portrait:order-2 landscape:order-3 portrait:max-h-32 landscape:w-48 landscape:lg:w-64 flex flex-col gap-2 p-2 overflow-y-auto portrait:border-t landscape:border-t-0 landscape:border-l border-[#312e6b]">
+        {/* Scoreboard - compact strip at bottom in portrait, right panel in landscape */}
+        <div className="order-2 portrait:order-2 landscape:order-3 portrait:shrink-0 landscape:w-48 landscape:lg:w-64 flex flex-col gap-2 portrait:p-1.5 landscape:p-2 overflow-y-auto portrait:border-t landscape:border-t-0 landscape:border-l border-[#312e6b]">
           <ScorePanel
             scores={gameState?.scores ?? {}}
             playerOrder={gameState?.playerOrder ?? []}

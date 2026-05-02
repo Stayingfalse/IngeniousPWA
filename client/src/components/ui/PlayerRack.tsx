@@ -61,7 +61,7 @@ export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect
               <svg
                 width={tileWidth}
                 height={tileHeight}
-                viewBox={`0 0 ${hexSize} ${hexHeight * 2}`}
+                viewBox={`-1 ${hexSize / 2 - 1} ${hexSize + 2} ${hexHeight * 2 + 2}`}
                 className="block"
               >
                 {/* Top hexagon */}
