@@ -14,6 +14,8 @@ export default function GameScreen() {
   const { myPlayerId, lobbyState } = useLobbyStore()
 
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
+  const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
+  const usedStartSymbols = gameState?.usedStartSymbols ?? []
 
   const handleHexClick = (coord: AxialCoord) => {
     if (!isMyTurn || selectedTileIndex === null) return
@@ -58,6 +60,8 @@ export default function GameScreen() {
             myRack={myRack}
             selectedTileIndex={selectedTileIndex}
             isMyTurn={isMyTurn}
+            isFirstMove={isFirstMove}
+            usedStartSymbols={usedStartSymbols}
             onTilePlaced={handleTilePlaced}
           />
         </div>

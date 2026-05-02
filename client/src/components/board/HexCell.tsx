@@ -28,6 +28,7 @@ interface HexCellProps {
   isStart?: boolean
   isSelectable?: boolean
   isFirstSelected?: boolean
+  isValidTarget?: boolean
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -41,6 +42,7 @@ export default function HexCell({
   isStart = false,
   isSelectable = false,
   isFirstSelected = false,
+  isValidTarget = false,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -52,15 +54,19 @@ export default function HexCell({
     fill = COLOR_MAP[color]
   } else if (isFirstSelected) {
     fill = 'rgba(168,85,247,0.5)'
+  } else if (isValidTarget) {
+    fill = 'rgba(168,85,247,0.15)'
   } else if (isStart) {
     fill = '#2d2a5a'
   }
 
   const stroke = isFirstSelected
     ? '#a855f7'
-    : isSelectable
-      ? 'rgba(168,85,247,0.3)'
-      : '#312e6b'
+    : isValidTarget
+      ? 'rgba(168,85,247,0.6)'
+      : isSelectable
+        ? 'rgba(168,85,247,0.3)'
+        : '#312e6b'
 
   return (
     <g
@@ -73,7 +79,7 @@ export default function HexCell({
         points={points}
         fill={fill}
         stroke={stroke}
-        strokeWidth={isFirstSelected ? 2 : 1}
+        strokeWidth={isFirstSelected || isValidTarget ? 2 : 1}
       />
       {isStart && !color && (
         <text

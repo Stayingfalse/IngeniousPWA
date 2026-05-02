@@ -96,9 +96,27 @@ export const lobbyPlayerQueries = {
   count: db.prepare<[string], { count: number }>('SELECT COUNT(*) as count FROM lobby_players WHERE lobby_id = ?'),
 }
 
+export interface GameResultRow {
+  id: string
+  lobby_id: string
+  winner_id: string | null
+  final_scores: string
+  move_count: number
+  duration_seconds: number
+  finished_at: number
+  winner_name: string | null
+}
+
 export const gameResultQueries = {
   insert: db.prepare(
     'INSERT INTO game_results (id, lobby_id, winner_id, final_scores, move_count, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+  ),
+  findRecent: db.prepare<[], GameResultRow>(
+    `SELECT gr.*, p.display_name as winner_name
+     FROM game_results gr
+     LEFT JOIN players p ON gr.winner_id = p.id
+     ORDER BY gr.finished_at DESC
+     LIMIT 20`,
   ),
 }
 
