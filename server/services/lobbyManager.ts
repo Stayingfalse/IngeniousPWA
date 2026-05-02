@@ -18,6 +18,7 @@ export class Lobby {
   hostId: string | null = null
   connections: Map<string, WebSocket> = new Map()
   gameRoom: GameRoom | null = null
+  createdAt: number = Date.now()
 
   constructor(id: string, maxPlayers: number) {
     this.id = id
@@ -52,6 +53,11 @@ export class Lobby {
 
 export class LobbyManager {
   private lobbies: Map<string, Lobby> = new Map()
+
+  constructor() {
+    // Periodically clean up stale lobbies to prevent memory leaks
+    setInterval(() => this.cleanupLobbies(), 10 * 60 * 1000)
+  }
 
   createLobby(maxPlayers: number): Lobby {
     const id = this.generateLobbyCode()
@@ -172,6 +178,26 @@ export class LobbyManager {
       code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
     } while (this.lobbies.has(code))
     return code
+  }
+
+  private cleanupLobbies(): void {
+    const now = Date.now()
+    const ONE_HOUR = 60 * 60 * 1000
+    const ONE_DAY = 24 * ONE_HOUR
+
+    for (const [id, lobby] of this.lobbies) {
+      const age = now - lobby.createdAt
+      const idle = lobby.connections.size === 0
+
+      const shouldRemove =
+        lobby.status === 'finished' ||
+        (lobby.status === 'waiting' && idle && age > ONE_HOUR) ||
+        (lobby.status === 'in_progress' && idle && age > ONE_DAY)
+
+      if (shouldRemove) {
+        this.lobbies.delete(id)
+      }
+    }
   }
 }
 

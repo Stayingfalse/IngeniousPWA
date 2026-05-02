@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
+import db from '../services/database'
 
 export default async function apiRoutes(fastify: FastifyInstance) {
   // Get or create player from token
@@ -72,5 +73,35 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const lobby = lobbyManager.getLobby(id)
     if (!lobby) return reply.status(404).send({ error: 'Lobby not found' })
     return reply.send(lobby.getLobbyState())
+  })
+
+  // Health check
+  fastify.get('/health', async (_request, reply) => {
+    try {
+      db.prepare('SELECT 1').get()
+      return reply.send({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: Math.floor(process.uptime()),
+      })
+    } catch {
+      return reply.status(503).send({ status: 'error', message: 'Database unavailable' })
+    }
+  })
+
+  // Game history
+  fastify.get('/api/history', async (_request, reply) => {
+    const rows = gameResultQueries.findRecent.all()
+    const results = rows.map(r => ({
+      id: r.id,
+      lobbyId: r.lobby_id,
+      winnerId: r.winner_id,
+      winnerName: r.winner_name,
+      scores: JSON.parse(r.final_scores) as Record<string, Record<string, number>>,
+      moveCount: r.move_count,
+      durationSeconds: r.duration_seconds,
+      finishedAt: r.finished_at,
+    }))
+    return reply.send({ results })
   })
 }

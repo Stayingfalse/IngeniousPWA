@@ -164,6 +164,7 @@ ingenious/
 - [x] Game screen: SVG hex board, score panel, player rack, turn indicator, tile bag count
 - [x] Tile selection from rack with click-to-place on two adjacent hexes
 - [x] Ghost preview of first selected hex during placement
+- [x] Valid placement hexes highlighted when a tile is selected
 - [x] Game Over modal with winner announcement and final scores
 - [x] INGENIOUS! banner/notification
 - [x] Swap Rack button (shown on player's turn)
@@ -176,33 +177,36 @@ ingenious/
 - [x] Docker Compose configuration with persistent volume
 - [x] pnpm workspace monorepo (shared, server, client packages)
 - [x] Fastify v5 (patched against Content-Type validation bypass CVEs)
+- [x] Production-ready health-check endpoint (`GET /health`)
+- [x] Lobby expiry: idle waiting lobbies cleaned up after 1 hour; idle in-progress lobbies after 24 hours
+- [x] Game history / past results browser (`GET /api/history` — last 20 games with winner name and scores)
+
+#### Game Correctness
+- [x] Full end-of-game detection: skips players with no legal moves; game only ends when **all** players are out of moves
 
 ---
 
 ### 🚧 Work In Progress / Known Gaps
 
 #### Game Rules
-- [ ] Full end-of-game detection accounts for *all* players having no moves (currently ends when the *current* player has no move)
 - [ ] Rack swap eligibility prompt shown to player before turn automatically ends
 - [ ] Spectator/observer mode (watch a game without playing)
 
 #### Frontend Polish
 - [ ] Tile rotation / orientation selection before placement (currently tile orientation is fixed by hex selection order)
-- [ ] Highlight valid placement hexes on tile select
 - [ ] Animated score increments
 - [ ] Mobile touch drag-to-place support (board is currently click-only)
 - [ ] Sound effects / audio feedback
 - [ ] Responsive layout optimisation for small screens in landscape
+- [ ] Copy lobby code to clipboard button
 
 #### Multiplayer
 - [ ] Reconnect mid-game: re-sync full game state to rejoining player
-- [ ] Lobby expiry / cleanup of abandoned in-memory lobbies
-- [ ] Game history / past results browser (`GET /api/history` route)
+- [ ] Turn timer / time limit per turn to prevent stalled games
 
 #### Infrastructure & Quality
 - [ ] Unit tests for server routes and WebSocket handlers
 - [ ] Integration / end-to-end tests
 - [ ] CI pipeline (GitHub Actions)
-- [ ] Production-ready health-check endpoint
 - [ ] Player name change in-lobby
 - [ ] Rate limiting on REST and WS endpoints

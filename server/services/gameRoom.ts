@@ -206,12 +206,20 @@ export class GameRoom {
   }
 
   private checkForNoMoves(): void {
-    // Check if current player has no legal moves
-    const currentPlayer = this.state.currentPlayerId
-    if (!hasLegalMove(this.state, currentPlayer)) {
-      // Game over - no legal placements remain for current player
-      const winner = determineWinnerByScore(this.state)
-      this.finishGame(winner, 'no_moves')
+    // Skip players with no legal moves; only end game when ALL players are out of moves
+    const totalPlayers = this.state.playerOrder.length
+    let skipped = 0
+
+    while (skipped < totalPlayers && !hasLegalMove(this.state, this.state.currentPlayerId)) {
+      skipped++
+      if (skipped >= totalPlayers) {
+        // Every player has been checked and none can move — game over
+        const winner = determineWinnerByScore(this.state)
+        this.finishGame(winner, 'no_moves')
+        return
+      }
+      // Advance past this player and check the next one
+      this.advanceTurn(this.state.currentPlayerId)
     }
   }
 

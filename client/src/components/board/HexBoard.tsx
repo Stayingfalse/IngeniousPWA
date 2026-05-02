@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import type { Color, Tile, AxialCoord } from '@ingenious/shared'
-import { allHexes, startSymbolPositions, key, isAdjacent, inBounds } from '@ingenious/shared'
+import { allHexes, startSymbolPositions, key, isAdjacent, inBounds, getLegalPlacements } from '@ingenious/shared'
 import HexCell from './HexCell'
 import TileGhost from './TileGhost'
 
@@ -19,6 +19,8 @@ interface HexBoardProps {
   myRack: Tile[]
   selectedTileIndex: number | null
   isMyTurn: boolean
+  isFirstMove: boolean
+  usedStartSymbols: string[]
   onTilePlaced: (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => void
 }
 
@@ -28,6 +30,8 @@ export default function HexBoard({
   myRack,
   selectedTileIndex,
   isMyTurn,
+  isFirstMove,
+  usedStartSymbols,
   onTilePlaced,
 }: HexBoardProps) {
   const [hoveredHex, setHoveredHex] = useState<AxialCoord | null>(null)
@@ -75,6 +79,18 @@ export default function HexBoard({
 
   const selectedTile = selectedTileIndex !== null ? myRack[selectedTileIndex] : null
 
+  // When a tile is selected, compute every hex that is part of a legal placement
+  const validTargetKeys = useMemo(() => {
+    if (!isMyTurn || selectedTileIndex === null) return new Set<string>()
+    const placements = getLegalPlacements(board, radius, isFirstMove, usedStartSymbols)
+    const keys = new Set<string>()
+    for (const { hexA, hexB } of placements) {
+      keys.add(key(hexA))
+      keys.add(key(hexB))
+    }
+    return keys
+  }, [isMyTurn, selectedTileIndex, board, radius, isFirstMove, usedStartSymbols])
+
   // Determine ghost hexes
   const ghostHexA = firstHex
   const ghostHexB =
@@ -107,6 +123,7 @@ export default function HexBoard({
             isStart={isStart && !color}
             isSelectable={isMyTurn && selectedTileIndex !== null && !color}
             isFirstSelected={!!isFirstSelected}
+            isValidTarget={!color && !isFirstSelected && validTargetKeys.has(k)}
             onClick={() => handleHexClick(hex)}
             onMouseEnter={() => handleHexHover(hex)}
             onMouseLeave={() => handleHexHover(null)}
