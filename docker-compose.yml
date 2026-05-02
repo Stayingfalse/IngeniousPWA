@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ingenious_data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_PATH=/app/data/ingenious.db
+      - CLIENT_DIST=/app/client/dist
+    restart: unless-stopped
+
+volumes:
+  ingenious_data:
