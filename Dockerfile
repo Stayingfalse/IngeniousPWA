@@ -15,7 +15,7 @@ FROM base AS client-build
 WORKDIR /app
 COPY package.json pnpm-workspace.yaml ./
 COPY client/package.json ./client/
-COPY shared/package.json ./shared/
+COPY shared/ ./shared/
 COPY --from=shared-build /app/shared/dist ./shared/dist
 RUN pnpm install --filter @ingenious/client
 WORKDIR /app/client
