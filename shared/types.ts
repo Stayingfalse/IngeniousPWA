@@ -34,12 +34,16 @@ export type PlayerInfo = {
   seat: number
 }
 
+export type TurnMode = 'realtime' | 'async'
+
 export type LobbyState = {
   id: string
   status: GameStatus
   players: PlayerInfo[]
   maxPlayers: number
   hostId: string
+  turnMode: TurnMode
+  turnLimitSeconds: number | null
 }
 
 export type GameResults = {

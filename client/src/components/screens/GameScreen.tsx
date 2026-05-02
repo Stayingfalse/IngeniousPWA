@@ -10,6 +10,13 @@ import IngeniousBanner from '../ui/IngeniousBanner'
 import { wsClient } from '../../lib/wsClient'
 import type { AxialCoord, Color } from '@ingenious/shared'
 import { findMinColor } from '@ingenious/shared'
+import {
+  isPushSupported,
+  getNotificationPermission,
+  subscribeToPush,
+  unsubscribeFromPush,
+  isSubscribed,
+} from '../../lib/pushNotifications'
 
 const COLOR_LABELS: Record<Color, string> = {
   red: 'Red', orange: 'Orange', yellow: 'Yellow',
@@ -23,8 +30,9 @@ export default function GameScreen() {
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
   const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
   const usedStartSymbols = gameState?.usedStartSymbols ?? []
+  const isAsyncMode = lobbyState?.turnMode === 'async'
 
-  // ── Feature 3: Rack-swap eligibility prompt ──────────────────────────────
+  // Rack-swap eligibility prompt
   const [showSwapPrompt, setShowSwapPrompt] = useState(false)
   const swapPromptShownForTurn = useRef<string | null>(null)
 
@@ -33,7 +41,6 @@ export default function GameScreen() {
       setShowSwapPrompt(false)
       return
     }
-    // Only show once per turn (keyed by moveCount so bonus turns re-check)
     const turnKey = `${myPlayerId}-${gameState.moveCount}`
     if (swapPromptShownForTurn.current === turnKey) return
     swapPromptShownForTurn.current = turnKey
@@ -47,11 +54,11 @@ export default function GameScreen() {
     }
   }, [isMyTurn, myPlayerId, gameState, myRack])
 
-  // ── Feature 5: Turn countdown ─────────────────────────────────────────────
+  // Turn countdown (realtime mode only)
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!gameState?.turnDeadline) {
+    if (!gameState?.turnDeadline || isAsyncMode) {
       setSecondsLeft(null)
       return
     }
@@ -62,14 +69,40 @@ export default function GameScreen() {
     update()
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
-  }, [gameState?.turnDeadline])
+  }, [gameState?.turnDeadline, isAsyncMode])
+
+  // Push notification opt-in (async mode)
+  const [pushPermission, setPushPermission] = useState(getNotificationPermission)
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+
+  useEffect(() => {
+    if (!isAsyncMode || !isPushSupported()) return
+    void isSubscribed().then(setPushSubscribed)
+  }, [isAsyncMode])
+
+  const handleEnableNotifications = async () => {
+    setPushLoading(true)
+    const result = await subscribeToPush()
+    setPushPermission(result)
+    if (result === 'granted') {
+      setPushSubscribed(true)
+    }
+    setPushLoading(false)
+  }
+
+  const handleDisableNotifications = async () => {
+    setPushLoading(true)
+    await unsubscribeFromPush()
+    setPushSubscribed(false)
+    setPushLoading(false)
+  }
 
   const handleHexClick = (_coord: AxialCoord) => {
     if (!isMyTurn || selectedTileIndex === null) return
   }
 
   const handleTilePlaced = (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => {
-    // Feature 4: swap hex order when tile is flipped
     const [a, b] = tileFlipped ? [hexB, hexA] : [hexA, hexB]
     wsClient.send({ type: 'PLACE_TILE', tileIndex, hexA: a, hexB: b })
     selectTile(null)
@@ -89,7 +122,6 @@ export default function GameScreen() {
     lobbyState?.players.map(p => [p.id, p.name]) ?? []
   )
 
-  // Determine countdown color
   const timerColor = secondsLeft !== null && secondsLeft <= 10
     ? 'text-red-400'
     : secondsLeft !== null && secondsLeft <= 20
@@ -107,16 +139,38 @@ export default function GameScreen() {
           playerNames={playerNames}
         />
         <div className="flex items-center gap-3 text-xs text-gray-400">
-          {secondsLeft !== null && (
+          {/* Real-time countdown */}
+          {secondsLeft !== null && !isAsyncMode && (
             <span className={`font-mono font-bold ${timerColor}`} title="Time left for this turn">
               {secondsLeft}s
             </span>
+          )}
+          {/* Async mode badge */}
+          {isAsyncMode && (
+            <span className="text-blue-400 text-xs" title="Turn-based game — no time limit">
+              ☁ Turn-based
+            </span>
+          )}
+          {/* Push notification toggle (async only) */}
+          {isAsyncMode && isPushSupported() && pushPermission !== 'denied' && (
+            <button
+              onClick={pushSubscribed ? handleDisableNotifications : handleEnableNotifications}
+              disabled={pushLoading}
+              title={pushSubscribed ? 'Disable turn notifications' : 'Enable turn notifications'}
+              className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                pushSubscribed
+                  ? 'border-blue-500 text-blue-400 hover:border-red-400 hover:text-red-400'
+                  : 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
+              } ${pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {pushSubscribed ? '🔔 On' : '🔕 Notify'}
+            </button>
           )}
           <span>{gameState?.tileBagCount ?? 0} tiles left</span>
         </div>
       </div>
 
-      {/* Feature 3: Swap eligibility prompt */}
+      {/* Rack swap eligibility prompt */}
       {showSwapPrompt && (() => {
         const scores = gameState?.scores[myPlayerId ?? '']
         const minColor = scores ? findMinColor(scores) : null

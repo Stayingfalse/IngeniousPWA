@@ -2,12 +2,22 @@ import { useState, useEffect } from 'react'
 import { wsClient } from '../../lib/wsClient'
 import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
+import type { TurnMode } from '@ingenious/shared'
+
+const TIMER_PRESETS: { label: string; seconds: number }[] = [
+  { label: '30 s', seconds: 30 },
+  { label: '1 min', seconds: 60 },
+  { label: '2 min', seconds: 120 },
+  { label: '5 min', seconds: 300 },
+]
 
 export default function HomeScreen() {
   const [playerName, setPlayerName] = useState('')
   const [lobbyCode, setLobbyCode] = useState('')
   const [maxPlayers, setMaxPlayers] = useState(2)
   const [mode, setMode] = useState<'join' | 'create'>('join')
+  const [turnMode, setTurnMode] = useState<TurnMode>('realtime')
+  const [turnLimitSeconds, setTurnLimitSeconds] = useState<number>(60)
   const [error, setError] = useState('')
   const { myPlayerName } = useLobbyStore()
 
@@ -47,7 +57,11 @@ export default function HomeScreen() {
       const res = await fetch('/api/lobbies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxPlayers }),
+        body: JSON.stringify({
+          maxPlayers,
+          turnMode,
+          turnLimitSeconds: turnMode === 'async' ? null : turnLimitSeconds,
+        }),
         credentials: 'include',
       })
       const data = await res.json() as { lobbyId?: string; error?: string }
@@ -115,22 +129,77 @@ export default function HomeScreen() {
             </button>
           </div>
         ) : (
-          <div>
-            <label className="block text-sm mb-1 text-gray-300">Players</label>
-            <select
-              className="w-full bg-[#0f0e17] border border-[#312e6b] rounded-lg px-3 py-2 text-white mb-3"
-              value={maxPlayers}
-              onChange={e => setMaxPlayers(Number(e.target.value))}
-            >
-              <option value={2}>2 Players</option>
-              <option value={3}>3 Players</option>
-              <option value={4}>4 Players</option>
-            </select>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm mb-1 text-gray-300">Players</label>
+              <select
+                className="w-full bg-[#0f0e17] border border-[#312e6b] rounded-lg px-3 py-2 text-white"
+                value={maxPlayers}
+                onChange={e => setMaxPlayers(Number(e.target.value))}
+              >
+                <option value={2}>2 Players</option>
+                <option value={3}>3 Players</option>
+                <option value={4}>4 Players</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1 text-gray-300">Game Mode</label>
+              <div className="flex gap-2">
+                <button
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    turnMode === 'realtime'
+                      ? 'bg-purple-600 border-purple-500 text-white'
+                      : 'bg-[#0f0e17] border-[#312e6b] text-gray-400 hover:border-purple-500'
+                  }`}
+                  onClick={() => setTurnMode('realtime')}
+                >
+                  ⚡ Real-time
+                </button>
+                <button
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    turnMode === 'async'
+                      ? 'bg-purple-600 border-purple-500 text-white'
+                      : 'bg-[#0f0e17] border-[#312e6b] text-gray-400 hover:border-purple-500'
+                  }`}
+                  onClick={() => setTurnMode('async')}
+                >
+                  ☁ Turn-based
+                </button>
+              </div>
+              <p className="text-gray-500 text-xs mt-1">
+                {turnMode === 'realtime'
+                  ? 'All players online at the same time; turns are time-limited.'
+                  : 'Take turns when convenient — hours or days between moves.'}
+              </p>
+            </div>
+
+            {turnMode === 'realtime' && (
+              <div>
+                <label className="block text-sm mb-1 text-gray-300">Turn Timer</label>
+                <div className="grid grid-cols-4 gap-1">
+                  {TIMER_PRESETS.map(p => (
+                    <button
+                      key={p.seconds}
+                      className={`py-2 rounded-lg text-xs font-medium border transition-colors ${
+                        turnLimitSeconds === p.seconds
+                          ? 'bg-purple-600 border-purple-500 text-white'
+                          : 'bg-[#0f0e17] border-[#312e6b] text-gray-400 hover:border-purple-500'
+                      }`}
+                      onClick={() => setTurnLimitSeconds(p.seconds)}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button
               className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg font-medium transition-colors"
               onClick={handleCreate}
             >
-              Create & Join
+              Create &amp; Join
             </button>
           </div>
         )}

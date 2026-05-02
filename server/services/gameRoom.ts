@@ -23,21 +23,57 @@ import {
   emptyScores,
   minScore,
 } from '@ingenious/shared'
-import { gameResultQueries, lobbyQueries } from './database'
+import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys } from './database'
 import { v4 as uuidv4 } from 'uuid'
 
-const TURN_TIME_LIMIT_MS = 60_000 // 60 seconds per turn
+// Lazy-load web-push to avoid crashing if not installed
+function sendPushNotification(
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  payload: object,
+): void {
+  if (!vapidKeys.publicKey || !vapidKeys.privateKey) return
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const webpush = require('web-push') as {
+      setVapidDetails(subject: string, pub: string, priv: string): void
+      sendNotification(sub: object, payload: string): Promise<void>
+    }
+    webpush.setVapidDetails(
+      'mailto:ingenious@example.com',
+      vapidKeys.publicKey,
+      vapidKeys.privateKey,
+    )
+    webpush.sendNotification(subscription, JSON.stringify(payload)).catch(() => {
+      // Non-critical — push may fail if subscription expired
+    })
+  } catch {
+    // web-push not available
+  }
+}
 
 export class GameRoom {
   private state: GameState
   private connections: Map<string, WebSocket> = new Map()
   private startedAt: number = Date.now()
   private lobbyId: string
+  private turnLimitMs: number | null
   private turnTimer: ReturnType<typeof setTimeout> | null = null
   private turnDeadline: number | null = null
+  // Player display names for push notification messages
+  private playerNames: Map<string, string> = new Map()
 
-  constructor(lobbyId: string, playerIds: string[]) {
+  constructor(
+    lobbyId: string,
+    playerIds: string[],
+    playerNames: Record<string, string>,
+    turnLimitMs: number | null,
+  ) {
     this.lobbyId = lobbyId
+    this.turnLimitMs = turnLimitMs
+    for (const [id, name] of Object.entries(playerNames)) {
+      this.playerNames.set(id, name)
+    }
+
     const bag = createTileBag()
     const initialRacks: Record<string, Tile[]> = {}
     let remaining = bag
@@ -136,8 +172,6 @@ export class GameRoom {
       return
     }
 
-    // Check if player can swap rack before refilling
-    // (handled by client sending SWAP_RACK or the turn ending normally)
     this.refillAndBroadcast(playerId, true)
   }
 
@@ -181,6 +215,7 @@ export class GameRoom {
     this.send(playerId, { type: 'YOUR_NEW_RACK', rack: drawn })
     this.advanceTurn(playerId)
     this.startTurnTimer()
+    this.notifyCurrentPlayerIfOffline()
     this.broadcastState()
   }
 
@@ -209,6 +244,7 @@ export class GameRoom {
     this.checkForNoMoves()
     if (this.state.status === 'in_progress') {
       this.startTurnTimer()
+      this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
   }
@@ -220,18 +256,15 @@ export class GameRoom {
   }
 
   private checkForNoMoves(): void {
-    // Skip players with no legal moves; only end game when ALL players are out of moves
     const totalPlayers = this.state.playerOrder.length
     let skipped = 0
 
     while (skipped < totalPlayers && !hasLegalMove(this.state, this.state.currentPlayerId)) {
       skipped++
-      // Advance past this player and check the next one
       this.advanceTurn(this.state.currentPlayerId)
     }
 
     if (skipped >= totalPlayers) {
-      // Every player has been checked and none can move — game over
       const winner = determineWinnerByScore(this.state)
       this.finishGame(winner, 'no_moves')
     }
@@ -239,10 +272,15 @@ export class GameRoom {
 
   private startTurnTimer(): void {
     this.clearTurnTimer()
-    this.turnDeadline = Date.now() + TURN_TIME_LIMIT_MS
+    if (this.turnLimitMs === null) {
+      // Async / turn-based mode — no timer
+      this.turnDeadline = null
+      return
+    }
+    this.turnDeadline = Date.now() + this.turnLimitMs
     this.turnTimer = setTimeout(() => {
       this.handleTurnTimeout()
-    }, TURN_TIME_LIMIT_MS)
+    }, this.turnLimitMs)
   }
 
   private clearTurnTimer(): void {
@@ -261,8 +299,37 @@ export class GameRoom {
     this.checkForNoMoves()
     if (this.state.status === 'in_progress') {
       this.startTurnTimer()
+      this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+  }
+
+  /**
+   * In async mode, when the current player is not connected, send a push
+   * notification so they know it is their turn.
+   */
+  private notifyCurrentPlayerIfOffline(): void {
+    if (this.turnLimitMs !== null) return // only in async mode
+    const currentPlayerId = this.state.currentPlayerId
+    const ws = this.connections.get(currentPlayerId)
+    const isOnline = ws && ws.readyState === 1
+    if (isOnline) return
+
+    try {
+      const sub = pushSubscriptionQueries.findByPlayer.get(currentPlayerId)
+      if (!sub) return
+      const playerName = this.playerNames.get(currentPlayerId) ?? 'You'
+      sendPushNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        {
+          title: 'Ingenious – Your Turn!',
+          body: `${playerName}, it's your turn in game ${this.lobbyId}.`,
+          url: `/?join=${this.lobbyId}`,
+        },
+      )
+    } catch {
+      // Non-critical
+    }
   }
 
   private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves'): void {

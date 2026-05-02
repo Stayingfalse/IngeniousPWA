@@ -107,6 +107,22 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
             )}
           </button>
         </div>
+        {/* Game mode badge */}
+        {lobbyState && (
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              lobbyState.turnMode === 'async'
+                ? 'bg-blue-900/60 text-blue-300'
+                : 'bg-purple-900/60 text-purple-300'
+            }`}>
+              {lobbyState.turnMode === 'async'
+                ? '☁ Turn-based'
+                : lobbyState.turnLimitSeconds !== null
+                  ? `⚡ Real-time · ${lobbyState.turnLimitSeconds >= 60 ? `${lobbyState.turnLimitSeconds / 60} min` : `${lobbyState.turnLimitSeconds} s`} / turn`
+                  : '⚡ Real-time'}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-center gap-2 mt-1">
           <button
             onClick={handleCopyInviteLink}

@@ -1,5 +1,5 @@
 import { WebSocket } from '@fastify/websocket'
-import type { PlayerInfo, LobbyState, ServerMessage } from '@ingenious/shared'
+import type { PlayerInfo, LobbyState, ServerMessage, TurnMode } from '@ingenious/shared'
 import { GameRoom } from './gameRoom'
 import { lobbyQueries, lobbyPlayerQueries } from './database'
 import { v4 as uuidv4 } from 'uuid'
@@ -19,10 +19,14 @@ export class Lobby {
   connections: Map<string, WebSocket> = new Map()
   gameRoom: GameRoom | null = null
   createdAt: number = Date.now()
+  turnMode: TurnMode
+  turnLimitSeconds: number | null
 
-  constructor(id: string, maxPlayers: number) {
+  constructor(id: string, maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null) {
     this.id = id
     this.maxPlayers = maxPlayers
+    this.turnMode = turnMode
+    this.turnLimitSeconds = turnLimitSeconds
   }
 
   getLobbyState(): LobbyState {
@@ -32,6 +36,8 @@ export class Lobby {
       players: this.players.map(p => ({ id: p.id, name: p.name, seat: p.seat })),
       maxPlayers: this.maxPlayers,
       hostId: this.hostId ?? '',
+      turnMode: this.turnMode,
+      turnLimitSeconds: this.turnLimitSeconds,
     }
   }
 
@@ -59,9 +65,9 @@ export class LobbyManager {
     setInterval(() => this.cleanupLobbies(), 10 * 60 * 1000)
   }
 
-  createLobby(maxPlayers: number): Lobby {
+  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null): Lobby {
     const id = this.generateLobbyCode()
-    const lobby = new Lobby(id, maxPlayers)
+    const lobby = new Lobby(id, maxPlayers, turnMode, turnLimitSeconds)
     this.lobbies.set(id, lobby)
 
     try {
@@ -131,7 +137,13 @@ export class LobbyManager {
     if (lobby.players.length < 2) return { error: 'NOT_ENOUGH_PLAYERS' }
 
     const playerIds = lobby.players.map(p => p.id)
-    const gameRoom = new GameRoom(lobbyId, playerIds)
+    const playerNames: Record<string, string> = {}
+    for (const p of lobby.players) {
+      playerNames[p.id] = p.name
+    }
+
+    const turnLimitMs = lobby.turnLimitSeconds !== null ? lobby.turnLimitSeconds * 1000 : null
+    const gameRoom = new GameRoom(lobbyId, playerIds, playerNames, turnLimitMs)
 
     lobby.gameRoom = gameRoom
     lobby.status = 'in_progress'
@@ -184,15 +196,20 @@ export class LobbyManager {
     const now = Date.now()
     const ONE_HOUR = 60 * 60 * 1000
     const ONE_DAY = 24 * ONE_HOUR
+    const THIRTY_DAYS = 30 * ONE_DAY
 
     for (const [id, lobby] of this.lobbies) {
       const age = now - lobby.createdAt
       const idle = lobby.connections.size === 0
+      const isAsync = lobby.turnMode === 'async'
 
       const shouldRemove =
         lobby.status === 'finished' ||
         (lobby.status === 'waiting' && idle && age > ONE_HOUR) ||
-        (lobby.status === 'in_progress' && idle && age > ONE_DAY)
+        // async in-progress games can be idle for up to 30 days
+        (lobby.status === 'in_progress' && isAsync && idle && age > THIRTY_DAYS) ||
+        // realtime in-progress games expire after 24h idle
+        (lobby.status === 'in_progress' && !isAsync && idle && age > ONE_DAY)
 
       if (shouldRemove) {
         this.lobbies.delete(id)

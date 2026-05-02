@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
+import type { TurnMode } from '@ingenious/shared'
 import db from '../services/database'
+
+// Valid real-time turn timer presets (seconds). null = async/turn-based.
+const VALID_TURN_LIMITS = new Set([30, 60, 120, 300])
 
 export default async function apiRoutes(fastify: FastifyInstance) {
   // Get or create player from token (10 requests per minute per IP)
@@ -65,12 +69,27 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const player = playerQueries.findByToken.get(token)
     if (!player) return reply.status(401).send({ error: 'Unauthorized' })
 
-    const body = request.body as { maxPlayers?: number }
+    const body = request.body as {
+      maxPlayers?: number
+      turnMode?: string
+      turnLimitSeconds?: number | null
+    }
     const maxPlayers = Math.min(4, Math.max(2, body?.maxPlayers ?? 2))
 
-    const lobby = lobbyManager.createLobby(maxPlayers)
+    const rawMode = body?.turnMode ?? 'realtime'
+    const turnMode: TurnMode = rawMode === 'async' ? 'async' : 'realtime'
 
-    return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers })
+    let turnLimitSeconds: number | null
+    if (turnMode === 'async') {
+      turnLimitSeconds = null
+    } else {
+      const requested = body?.turnLimitSeconds ?? 60
+      turnLimitSeconds = VALID_TURN_LIMITS.has(requested) ? requested : 60
+    }
+
+    const lobby = lobbyManager.createLobby(maxPlayers, turnMode, turnLimitSeconds)
+
+    return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode, turnLimitSeconds })
   })
 
   // Get lobby info (60 per minute per IP)
@@ -81,6 +100,59 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const lobby = lobbyManager.getLobby(id)
     if (!lobby) return reply.status(404).send({ error: 'Lobby not found' })
     return reply.send(lobby.getLobbyState())
+  })
+
+  // ── Push Notification endpoints ──────────────────────────────────────────
+
+  // Return the VAPID public key so clients can subscribe (20 req/min)
+  fastify.get('/api/push/vapid-key', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (_request, reply) => {
+    if (!vapidKeys.publicKey) {
+      return reply.status(503).send({ error: 'Push notifications not configured' })
+    }
+    return reply.send({ publicKey: vapidKeys.publicKey })
+  })
+
+  // Save / update a player's push subscription (20 req/min)
+  fastify.post('/api/push/subscribe', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const body = request.body as {
+      endpoint?: string
+      keys?: { p256dh?: string; auth?: string }
+    }
+
+    const endpoint = body?.endpoint
+    const p256dh = body?.keys?.p256dh
+    const auth = body?.keys?.auth
+
+    if (!endpoint || !p256dh || !auth) {
+      return reply.status(400).send({ error: 'Missing subscription fields' })
+    }
+
+    pushSubscriptionQueries.upsert.run(player.id, endpoint, p256dh, auth)
+    return reply.send({ ok: true })
+  })
+
+  // Remove a player's push subscription (20 req/min)
+  fastify.delete('/api/push/subscribe', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    pushSubscriptionQueries.delete.run(player.id)
+    return reply.send({ ok: true })
   })
 
   // Health check
