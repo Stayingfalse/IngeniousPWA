@@ -12,16 +12,6 @@ function hexToPixel(q: number, r: number): { x: number; y: number } {
   return { x, y }
 }
 
-function hexCorners(cx: number, cy: number, size: number): string {
-  const points = []
-  for (let i = 0; i < 6; i++) {
-    const angle = (Math.PI / 180) * (60 * i)
-    const px = cx + size * Math.cos(angle)
-    const py = cy + size * Math.sin(angle)
-    points.push(`${px},${py}`)
-  }
-  return points.join(' ')
-}
 
 interface HexBoardProps {
   board: Record<string, Color>

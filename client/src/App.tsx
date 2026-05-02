@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
-import { useWebSocket } from '../hooks/useWebSocket'
-import { useLobbyStore } from '../store/lobbyStore'
-import { useGameStore } from '../store/gameStore'
+import { useWebSocket } from './hooks/useWebSocket'
+import { useLobbyStore } from './store/lobbyStore'
+import { useGameStore } from './store/gameStore'
 import HomeScreen from './screens/HomeScreen'
 import LobbyScreen from './screens/LobbyScreen'
 import GameScreen from './screens/GameScreen'
@@ -72,7 +72,7 @@ export default function App() {
           Reconnecting…
         </div>
       )}
-      {screen === 'home' && <HomeScreen onNavigate={setScreen} />}
+      {screen === 'home' && <HomeScreen />}
       {screen === 'lobby' && <LobbyScreen onNavigate={setScreen} />}
       {screen === 'game' && <GameScreen />}
     </div>

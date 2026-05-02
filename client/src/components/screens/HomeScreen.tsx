@@ -3,13 +3,7 @@ import { wsClient } from '../../lib/wsClient'
 import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
 
-type Screen = 'home' | 'lobby' | 'game'
-
-interface HomeScreenProps {
-  onNavigate: (screen: Screen) => void
-}
-
-export default function HomeScreen({ onNavigate: _ }: HomeScreenProps) {
+export default function HomeScreen() {
   const [playerName, setPlayerName] = useState('')
   const [lobbyCode, setLobbyCode] = useState('')
   const [maxPlayers, setMaxPlayers] = useState(2)
