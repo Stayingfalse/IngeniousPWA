@@ -13,6 +13,7 @@ type Screen = 'home' | 'lobby' | 'game'
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
+  const [authReady, setAuthReady] = useState(false)
   const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
@@ -87,7 +88,7 @@ export default function App() {
     }
   }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver])
 
-  const { connected } = useWebSocket(handleMessage)
+  const { connected } = useWebSocket(handleMessage, authReady)
 
   // Ensure player_token cookie is established on mount so HTTP API calls succeed
   useEffect(() => {
@@ -99,6 +100,7 @@ export default function App() {
         }
       })
       .catch((err) => console.warn('[Auth] Initialization failed:', err))
+      .finally(() => setAuthReady(true))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
