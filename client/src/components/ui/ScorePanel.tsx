@@ -40,7 +40,7 @@ export default function ScorePanel({
             return (
               <div
                 key={pid}
-                className={`flex-shrink-0 flex flex-col gap-1 px-2 py-1 rounded-lg border ${
+                className={`flex-shrink-0 w-[25vw] flex flex-col gap-1 px-2 py-1 rounded-lg border ${
                   isCurrent ? 'border-green-500/60 bg-[#1a1833]' : 'border-[#312e6b] bg-[#1a1833]'
                 } ${isCurrent ? 'opacity-100' : 'opacity-70'}`}
               >

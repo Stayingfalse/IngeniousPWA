@@ -3,6 +3,22 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] }
 
+// ── Version ────────────────────────────────────────────────────────────────
+// Injected from package.json at build time via Vite's `define`. Bump the
+// `version` field in client/package.json and the new SW file will differ from
+// the previously installed one, causing the browser to queue a new install.
+// The skipWaiting() call below then activates it immediately for all clients.
+declare const __APP_VERSION__: string
+
+// Activate new service worker immediately so returning visitors always get the latest version
+self.addEventListener('install', () => {
+  console.log(`[SW] Installing version ${__APP_VERSION__}`)
+  self.skipWaiting()
+})
+self.addEventListener('activate', (event: ExtendableEvent) => {
+  event.waitUntil(self.clients.claim())
+})
+
 // Workbox precache (injected by vite-plugin-pwa at build time)
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)

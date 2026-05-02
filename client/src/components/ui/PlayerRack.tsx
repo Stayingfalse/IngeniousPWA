@@ -32,7 +32,7 @@ interface PlayerRackProps {
 }
 
 export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect, onFlip, isMyTurn, onSwap }: PlayerRackProps) {
-  const hexSize = 24
+  const hexSize = 28
   const hexHeight = hexSize * Math.sqrt(3) / 2
   const tileWidth = hexSize + 2
   const tileHeight = hexHeight * 2 + 2
