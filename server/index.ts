@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import fastifyCookie from '@fastify/cookie'
 import fastifyStatic from '@fastify/static'
 import fastifyWebsocket from '@fastify/websocket'
+import fastifyRateLimit from '@fastify/rate-limit'
 import path from 'path'
 import fs from 'fs'
 import apiRoutes from './routes/api'
@@ -20,6 +21,11 @@ const fastify = Fastify({
 async function start() {
   await fastify.register(fastifyCookie)
   await fastify.register(fastifyWebsocket)
+
+  // Rate limiting: protect REST API from abuse
+  await fastify.register(fastifyRateLimit, {
+    global: false, // apply per-route via config
+  })
 
   // Register routes
   await fastify.register(apiRoutes)

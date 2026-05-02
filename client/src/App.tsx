@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useLobbyStore } from './store/lobbyStore'
 import { useGameStore } from './store/gameStore'
@@ -6,12 +6,13 @@ import HomeScreen from './components/screens/HomeScreen'
 import LobbyScreen from './components/screens/LobbyScreen'
 import GameScreen from './components/screens/GameScreen'
 import type { ServerMessage } from '@ingenious/shared'
+import { wsClient } from './lib/wsClient'
 
 type Screen = 'home' | 'lobby' | 'game'
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
-  const { setMyPlayer, setLobby, playerJoined, playerLeft } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, lobbyId, myPlayerName } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -23,7 +24,8 @@ export default function App() {
           msg.lobbyState,
           msg.seat,
         )
-        setScreen('lobby')
+        // If a game is already in progress (mid-game reconnect), go straight to the game screen
+        setScreen(msg.lobbyState.status === 'in_progress' ? 'game' : 'lobby')
         break
 
       case 'PLAYER_JOINED':
@@ -64,6 +66,18 @@ export default function App() {
   }, [setMyPlayer, setLobby, playerJoined, playerLeft, setGameState, setMyRack, setIngenious, setGameOver])
 
   const { connected } = useWebSocket(handleMessage)
+
+  // Auto re-join lobby/game when WebSocket reconnects
+  const prevConnectedRef = useRef(false)
+  useEffect(() => {
+    const wasDisconnected = !prevConnectedRef.current
+    const nowConnected = connected
+    const shouldReconnect = nowConnected && wasDisconnected && !!lobbyId && screen !== 'home'
+    if (shouldReconnect) {
+      wsClient.send({ type: 'JOIN_LOBBY', lobbyId, playerName: myPlayerName || 'Player' })
+    }
+    prevConnectedRef.current = connected
+  }, [connected, lobbyId, myPlayerName, screen])
 
   return (
     <div className="min-h-screen bg-[#0f0e17] text-white">

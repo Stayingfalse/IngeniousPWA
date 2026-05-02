@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useLobbyStore } from '../../store/lobbyStore'
 import { wsClient } from '../../lib/wsClient'
 
@@ -8,7 +9,11 @@ interface LobbyScreenProps {
 }
 
 export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
-  const { lobbyState, lobbyId, myPlayerId } = useLobbyStore()
+  const { lobbyState, lobbyId, myPlayerId, myPlayerName, setMyPlayer } = useLobbyStore()
+  const [copied, setCopied] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameError, setNameError] = useState('')
 
   const isHost = lobbyState?.hostId === myPlayerId
   const canStart = isHost && (lobbyState?.players.length ?? 0) >= 2
@@ -21,12 +26,72 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
     onNavigate('home')
   }
 
+  const handleCopyCode = async () => {
+    if (!lobbyId) return
+    try {
+      await navigator.clipboard.writeText(lobbyId)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback: select text if clipboard API not available
+    }
+  }
+
+  const handleStartEditName = () => {
+    setNameInput(myPlayerName || '')
+    setNameError('')
+    setEditingName(true)
+  }
+
+  const handleSaveName = async () => {
+    const trimmed = nameInput.trim()
+    if (!trimmed || trimmed.length < 1 || trimmed.length > 20) {
+      setNameError('Name must be 1–20 characters')
+      return
+    }
+    try {
+      const res = await fetch('/api/player/name', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const data = await res.json() as { error?: string }
+        setNameError(data.error || 'Failed to update name')
+        return
+      }
+      if (myPlayerId) setMyPlayer(myPlayerId, trimmed)
+      setEditingName(false)
+    } catch {
+      setNameError('Network error')
+    }
+  }
+
+  const handleNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') void handleSaveName()
+    if (e.key === 'Escape') setEditingName(false)
+  }
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-purple-300 mb-1">Lobby</h1>
-        <div className="text-gray-400 text-sm">
+        <div className="flex items-center justify-center gap-2 text-gray-400 text-sm">
           Code: <span className="font-mono text-white text-lg tracking-widest">{lobbyId}</span>
+          <button
+            onClick={handleCopyCode}
+            title="Copy lobby code"
+            className="ml-1 text-gray-400 hover:text-white transition-colors"
+          >
+            {copied ? (
+              <span className="text-green-400 text-xs font-medium">Copied!</span>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-4 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
         </div>
         <p className="text-gray-500 text-xs mt-1">Share this code with friends</p>
       </div>
@@ -45,11 +110,39 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
               <div className="w-8 h-8 rounded-full bg-purple-700 flex items-center justify-center text-sm font-bold">
                 {player.seat + 1}
               </div>
-              <span className="flex-1 text-white">{player.name}</span>
+              {player.id === myPlayerId && editingName ? (
+                <div className="flex-1 flex items-center gap-1">
+                  <input
+                    className="flex-1 bg-[#1a1833] border border-purple-500 rounded px-2 py-0.5 text-white text-sm focus:outline-none"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={handleNameKeyDown}
+                    maxLength={20}
+                    autoFocus
+                  />
+                  <button onClick={() => void handleSaveName()} className="text-green-400 hover:text-green-300 text-xs px-1">Save</button>
+                  <button onClick={() => setEditingName(false)} className="text-gray-500 hover:text-gray-300 text-xs px-1">✕</button>
+                </div>
+              ) : (
+                <span className="flex-1 text-white flex items-center gap-1">
+                  {player.name}
+                  {player.id === myPlayerId && (
+                    <button
+                      onClick={handleStartEditName}
+                      title="Change name"
+                      className="ml-1 text-gray-500 hover:text-purple-400 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.415.586H9v-2.414a2 2 0 01.586-1.414z" />
+                      </svg>
+                    </button>
+                  )}
+                </span>
+              )}
               {player.id === lobbyState?.hostId && (
                 <span className="text-xs text-yellow-400">Host</span>
               )}
-              {player.id === myPlayerId && (
+              {player.id === myPlayerId && !editingName && (
                 <span className="text-xs text-purple-400">You</span>
               )}
             </div>
@@ -68,6 +161,8 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
             </div>
           ))}
         </div>
+
+        {nameError && <p className="text-red-400 text-xs mb-3">{nameError}</p>}
 
         <div className="space-y-2">
           {isHost && (
