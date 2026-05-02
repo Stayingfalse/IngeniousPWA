@@ -35,7 +35,7 @@ COPY server/ ./
 RUN pnpm build
 # Install production-only deps while python3/make/g++ are available from base
 WORKDIR /app
-RUN pnpm install --filter @ingenious/server --prod
+RUN CI=true pnpm install --filter @ingenious/server --prod
 
 # Runtime
 FROM node:22-alpine AS runtime
