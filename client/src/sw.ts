@@ -3,6 +3,12 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown[] }
 
+// Activate new service worker immediately so returning visitors always get the latest version
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (event: ExtendableEvent) => {
+  event.waitUntil(self.clients.claim())
+})
+
 // Workbox precache (injected by vite-plugin-pwa at build time)
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
