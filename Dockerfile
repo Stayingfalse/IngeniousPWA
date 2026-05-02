@@ -33,10 +33,12 @@ RUN pnpm install --filter @ingenious/server
 WORKDIR /app/server
 COPY server/ ./
 RUN pnpm build
+# Install production-only deps while python3/make/g++ are available from base
+WORKDIR /app
+RUN pnpm install --filter @ingenious/server --prod
 
 # Runtime
 FROM node:22-alpine AS runtime
-RUN npm install -g pnpm
 WORKDIR /app
 
 COPY package.json pnpm-workspace.yaml ./
@@ -46,8 +48,7 @@ COPY shared/package.json ./shared/
 COPY --from=shared-build /app/shared/dist ./shared/dist
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=client-build /app/client/dist ./client/dist
-
-RUN pnpm install --filter @ingenious/server --prod
+COPY --from=server-build /app/node_modules ./node_modules
 
 ENV NODE_ENV=production
 ENV PORT=3000
