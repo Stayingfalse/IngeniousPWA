@@ -13,11 +13,11 @@ RUN pnpm build
 # Build client
 FROM base AS client-build
 WORKDIR /app
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY client/package.json ./client/
 COPY shared/ ./shared/
 COPY --from=shared-build /app/shared/dist ./shared/dist
-RUN pnpm install --filter @ingenious/client
+RUN pnpm install --filter @ingenious/client --frozen-lockfile
 WORKDIR /app/client
 COPY client/ ./
 RUN pnpm build
@@ -25,17 +25,17 @@ RUN pnpm build
 # Build server
 FROM base AS server-build
 WORKDIR /app
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY server/package.json ./server/
 COPY shared/package.json ./shared/
 COPY --from=shared-build /app/shared/dist ./shared/dist
-RUN pnpm install --filter @ingenious/server
+RUN pnpm install --filter @ingenious/server --frozen-lockfile
 WORKDIR /app/server
 COPY server/ ./
 RUN pnpm build
 # Install production-only deps while python3/make/g++ are available from base
 WORKDIR /app
-RUN CI=true pnpm install --filter @ingenious/server --prod
+RUN CI=true pnpm install --filter @ingenious/server --prod --frozen-lockfile
 
 # Runtime
 FROM node:22-alpine AS runtime
@@ -49,6 +49,7 @@ COPY --from=shared-build /app/shared/dist ./shared/dist
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=client-build /app/client/dist ./client/dist
 COPY --from=server-build /app/node_modules ./node_modules
+COPY --from=server-build /app/server/node_modules ./server/node_modules
 
 ENV NODE_ENV=production
 ENV PORT=3000
