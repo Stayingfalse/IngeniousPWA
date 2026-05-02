@@ -92,16 +92,24 @@ export default async function apiRoutes(fastify: FastifyInstance) {
   // Game history
   fastify.get('/api/history', async (_request, reply) => {
     const rows = gameResultQueries.findRecent.all()
-    const results = rows.map(r => ({
-      id: r.id,
-      lobbyId: r.lobby_id,
-      winnerId: r.winner_id,
-      winnerName: r.winner_name,
-      scores: JSON.parse(r.final_scores) as Record<string, Record<string, number>>,
-      moveCount: r.move_count,
-      durationSeconds: r.duration_seconds,
-      finishedAt: r.finished_at,
-    }))
+    const results = rows.map(r => {
+      let scores: Record<string, Record<string, number>> = {}
+      try {
+        scores = JSON.parse(r.final_scores) as Record<string, Record<string, number>>
+      } catch {
+        // Malformed scores — return empty object rather than crashing
+      }
+      return {
+        id: r.id,
+        lobbyId: r.lobby_id,
+        winnerId: r.winner_id,
+        winnerName: r.winner_name,
+        scores,
+        moveCount: r.move_count,
+        durationSeconds: r.duration_seconds,
+        finishedAt: r.finished_at,
+      }
+    })
     return reply.send({ results })
   })
 }

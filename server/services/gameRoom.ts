@@ -212,14 +212,14 @@ export class GameRoom {
 
     while (skipped < totalPlayers && !hasLegalMove(this.state, this.state.currentPlayerId)) {
       skipped++
-      if (skipped >= totalPlayers) {
-        // Every player has been checked and none can move — game over
-        const winner = determineWinnerByScore(this.state)
-        this.finishGame(winner, 'no_moves')
-        return
-      }
       // Advance past this player and check the next one
       this.advanceTurn(this.state.currentPlayerId)
+    }
+
+    if (skipped >= totalPlayers) {
+      // Every player has been checked and none can move — game over
+      const winner = determineWinnerByScore(this.state)
+      this.finishGame(winner, 'no_moves')
     }
   }
 
