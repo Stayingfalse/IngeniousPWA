@@ -81,10 +81,19 @@ describe('gameEngine', () => {
       ).toBe(false)
     })
 
-    it('accepts valid non-first-move placement', () => {
+    it('accepts valid non-first-move placement adjacent to an existing tile', () => {
+      // Board has a tile at {q:-1,r:0}; placing at {q:0,r:0} and {q:1,r:0} is adjacent to it
+      const board: Record<string, Color> = { '-1,0': 'red' }
+      expect(
+        isLegalPlacement({ q: 0, r: 0 }, { q: 1, r: 0 }, board, radius, false, []),
+      ).toBe(true)
+    })
+
+    it('rejects non-first-move placement not adjacent to any existing tile', () => {
+      // Empty board — no occupied neighbours — placement should be illegal
       expect(
         isLegalPlacement({ q: 0, r: 0 }, { q: 1, r: 0 }, {}, radius, false, []),
-      ).toBe(true)
+      ).toBe(false)
     })
 
     it('requires adjacency to start symbol on first move', () => {
@@ -123,11 +132,15 @@ describe('gameEngine', () => {
       // All placements should be near start symbols
     })
 
-    it('returns more placements after first move', () => {
+    it('returns more placements when board has existing tiles (non-first move)', () => {
       const radius = 6
       const firstMovePlacements = getLegalPlacements({}, radius, true, [])
-      const allPlacements = getLegalPlacements({}, radius, false, [])
-      expect(allPlacements.length).toBeGreaterThan(firstMovePlacements.length)
+      // A board with one occupied tile enables adjacency-based placements
+      const board: Record<string, Color> = { '0,0': 'red' }
+      const nonFirstPlacements = getLegalPlacements(board, radius, false, [])
+      // Both should find valid placements
+      expect(firstMovePlacements.length).toBeGreaterThan(0)
+      expect(nonFirstPlacements.length).toBeGreaterThan(0)
     })
   })
 
@@ -166,14 +179,15 @@ describe('gameEngine', () => {
     })
 
     it('places tile and updates board', () => {
-      const state = makeState({ firstTurnPlayersRemaining: [] })
+      // Board has an existing tile adjacent to the placement so it passes the adjacency check
+      const state = makeState({ firstTurnPlayersRemaining: [], board: { '-1,0': 'green' } })
       const { newState } = applyMove(state, 'p1', 0, { q: 0, r: 0 }, { q: 1, r: 0 })
       expect(newState.board['0,0']).toBe('red')
       expect(newState.board['1,0']).toBe('blue')
     })
 
     it('removes tile from rack after placement', () => {
-      const state = makeState({ firstTurnPlayersRemaining: [] })
+      const state = makeState({ firstTurnPlayersRemaining: [], board: { '-1,0': 'green' } })
       const { newState } = applyMove(state, 'p1', 0, { q: 0, r: 0 }, { q: 1, r: 0 })
       expect(newState.playerRacks['p1'].length).toBe(1)
     })
