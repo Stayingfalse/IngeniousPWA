@@ -39,7 +39,7 @@ export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect
 
   return (
     <div className="flex portrait:flex-row landscape:flex-col items-center gap-3 justify-center portrait:flex-wrap landscape:flex-nowrap w-full">
-      <div className="flex portrait:flex-row landscape:flex-col gap-2 items-center portrait:items-end landscape:items-center">
+      <div className="flex portrait:flex-row portrait:flex-wrap landscape:grid landscape:grid-cols-2 gap-2 items-center portrait:justify-center landscape:justify-items-center">
         {tiles.map((tile, i) => {
           const isSelected = selectedIndex === i
           const displayA = isSelected && tileFlipped ? tile.colorB : tile.colorA

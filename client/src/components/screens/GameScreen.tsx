@@ -24,8 +24,17 @@ const COLOR_LABELS: Record<Color, string> = {
   green: 'Green', blue: 'Blue', purple: 'Purple',
 }
 
+const INGENIOUS_COLOR_HEX: Record<Color, string> = {
+  red: '#ef4444',
+  orange: '#f97316',
+  yellow: '#eab308',
+  green: '#22c55e',
+  blue: '#3b82f6',
+  purple: '#a855f7',
+}
+
 export default function GameScreen() {
-  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver } = useGameStore()
+  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious } = useGameStore()
   const { myPlayerId, lobbyState } = useLobbyStore()
 
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
@@ -57,6 +66,25 @@ export default function GameScreen() {
       setShowSwapPrompt(true)
     }
   }, [isMyTurn, myPlayerId, gameState, myRack])
+
+  // Turn / Ingenious notification overlay
+  const [showTurnNotification, setShowTurnNotification] = useState(false)
+  const [turnNotificationKey, setTurnNotificationKey] = useState(0)
+  const prevMoveCountRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!isMyTurn || !gameState) return
+    const moveCount = gameState.moveCount
+    if (moveCount === prevMoveCountRef.current) return
+    prevMoveCountRef.current = moveCount
+    // Only show "Your Turn" if there's no ingenious notification showing
+    if (!lastIngenious) {
+      setTurnNotificationKey(k => k + 1)
+      setShowTurnNotification(true)
+      const id = setTimeout(() => setShowTurnNotification(false), 2500)
+      return () => clearTimeout(id)
+    }
+  }, [isMyTurn, gameState, lastIngenious])
 
   // Turn countdown (realtime mode only)
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
@@ -211,7 +239,7 @@ export default function GameScreen() {
       {/* Landscape mode: Rack on left, Board in center (full height), Scoreboard on right */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col portrait:flex-col landscape:flex-row">
         {/* Tile rack - bottom in portrait, left in landscape */}
-        <div className="order-3 portrait:order-3 landscape:order-1 bg-[#1a1833] border-t portrait:border-t landscape:border-t-0 landscape:border-r border-[#312e6b] portrait:p-2 landscape:p-2 landscape:w-32 landscape:flex landscape:items-center">
+        <div className="order-3 portrait:order-3 landscape:order-1 portrait:shrink-0 bg-[#1a1833] border-t portrait:border-t landscape:border-t-0 landscape:border-r border-[#312e6b] portrait:p-2 landscape:p-2 landscape:w-32 landscape:flex landscape:items-center landscape:overflow-y-auto">
           <PlayerRack
             tiles={myRack}
             selectedIndex={selectedTileIndex}
@@ -251,6 +279,36 @@ export default function GameScreen() {
       </div>
 
       {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
+
+      {/* Fade-in/out notification: INGENIOUS! or Your Turn */}
+      {(lastIngenious || showTurnNotification) && (
+        <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-40">
+          {lastIngenious ? (
+            <div
+              key={`ing-${lastIngenious.color}-${lastIngenious.playerId}`}
+              style={{
+                animation: 'fadeInOut 3s ease-in-out forwards',
+                color: INGENIOUS_COLOR_HEX[lastIngenious.color],
+                textShadow: `0 0 24px ${INGENIOUS_COLOR_HEX[lastIngenious.color]}, 0 0 48px ${INGENIOUS_COLOR_HEX[lastIngenious.color]}`,
+              }}
+              className="text-6xl portrait:text-5xl font-black tracking-widest uppercase select-none drop-shadow-2xl"
+            >
+              INGENIOUS!
+            </div>
+          ) : (
+            <div
+              key={`turn-${turnNotificationKey}`}
+              style={{
+                animation: 'fadeInOut 2.5s ease-in-out forwards',
+                textShadow: '0 0 24px rgba(168,85,247,0.9), 0 0 48px rgba(168,85,247,0.5)',
+              }}
+              className="text-5xl portrait:text-4xl font-black tracking-wider text-white select-none drop-shadow-2xl"
+            >
+              Your Turn!
+            </div>
+          )}
+        </div>
+      )}
 
       {gameOver && (
         <GameOverModal
