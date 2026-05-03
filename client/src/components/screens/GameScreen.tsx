@@ -33,6 +33,9 @@ const INGENIOUS_COLOR_HEX: Record<Color, string> = {
   purple: '#a855f7',
 }
 
+const INGENIOUS_ANIMATION_DURATION_MS = 3000
+const TURN_ANIMATION_DURATION_MS = 2500
+
 export default function GameScreen() {
   const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious } = useGameStore()
   const { myPlayerId, lobbyState } = useLobbyStore()
@@ -75,13 +78,18 @@ export default function GameScreen() {
   useEffect(() => {
     if (!isMyTurn || !gameState) return
     const moveCount = gameState.moveCount
+    // Initialize ref on first encounter without triggering a notification
+    if (prevMoveCountRef.current === null) {
+      prevMoveCountRef.current = moveCount
+      return
+    }
     if (moveCount === prevMoveCountRef.current) return
     prevMoveCountRef.current = moveCount
     // Only show "Your Turn" if there's no ingenious notification showing
     if (!lastIngenious) {
       setTurnNotificationKey(k => k + 1)
       setShowTurnNotification(true)
-      const id = setTimeout(() => setShowTurnNotification(false), 2500)
+      const id = setTimeout(() => setShowTurnNotification(false), TURN_ANIMATION_DURATION_MS)
       return () => clearTimeout(id)
     }
   }, [isMyTurn, gameState, lastIngenious])
@@ -287,7 +295,7 @@ export default function GameScreen() {
             <div
               key={`ing-${lastIngenious.color}-${lastIngenious.playerId}`}
               style={{
-                animation: 'fadeInOut 3s ease-in-out forwards',
+                animation: `fadeInOut ${INGENIOUS_ANIMATION_DURATION_MS / 1000}s ease-in-out forwards`,
                 color: INGENIOUS_COLOR_HEX[lastIngenious.color],
                 textShadow: `0 0 24px ${INGENIOUS_COLOR_HEX[lastIngenious.color]}, 0 0 48px ${INGENIOUS_COLOR_HEX[lastIngenious.color]}`,
               }}
@@ -299,7 +307,7 @@ export default function GameScreen() {
             <div
               key={`turn-${turnNotificationKey}`}
               style={{
-                animation: 'fadeInOut 2.5s ease-in-out forwards',
+                animation: `fadeInOut ${TURN_ANIMATION_DURATION_MS / 1000}s ease-in-out forwards`,
                 textShadow: '0 0 24px rgba(168,85,247,0.9), 0 0 48px rgba(168,85,247,0.5)',
               }}
               className="text-5xl portrait:text-4xl font-black tracking-wider text-white select-none drop-shadow-2xl"
