@@ -30,7 +30,7 @@ export default function ScorePanel({
     <>
       {/* Compact portrait layout: horizontal rows per player */}
       <div className="portrait:block landscape:hidden">
-        <div className="flex flex-row gap-2 overflow-x-auto py-1">
+        <div className="flex flex-row flex-wrap gap-2 py-1">
           {playerOrder.map(pid => {
             const playerScores = scores[pid] ?? {}
             const isMe = pid === myPlayerId
@@ -40,7 +40,7 @@ export default function ScorePanel({
             return (
               <div
                 key={pid}
-                className={`flex-shrink-0 w-[25vw] flex flex-col gap-1 px-2 py-1 rounded-lg border ${
+                className={`min-w-[25%] max-w-[50%] flex-1 flex flex-col gap-1 px-2 py-1 rounded-lg border ${
                   isCurrent ? 'border-green-500/60 bg-[#1a1833]' : 'border-[#312e6b] bg-[#1a1833]'
                 } ${isCurrent ? 'opacity-100' : 'opacity-70'}`}
               >

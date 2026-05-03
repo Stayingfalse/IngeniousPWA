@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { wsClient } from '../../lib/wsClient'
 import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
+import HowToPlayModal from '../ui/HowToPlayModal'
 import type { TurnMode } from '@ingenious/shared'
 
 const TIMER_PRESETS: { label: string; seconds: number }[] = [
@@ -20,6 +21,7 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
   const [turnMode, setTurnMode] = useState<TurnMode>('realtime')
   const [turnLimitSeconds, setTurnLimitSeconds] = useState<number>(60)
   const [error, setError] = useState('')
+  const [showHowToPlay, setShowHowToPlay] = useState(false)
 
   // Display global error if provided
   useEffect(() => {
@@ -28,15 +30,18 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
     }
   }, [globalError])
 
-  // Load player name from localStorage on mount
+  // Load player name from localStorage/store only once on mount
+  const nameInitialized = useRef(false)
   useEffect(() => {
+    if (nameInitialized.current) return
+    nameInitialized.current = true
     const savedName = localStorage.getItem('playerName')
-    if (savedName && !playerName) {
+    if (savedName && savedName.trim()) {
       setPlayerName(savedName)
-    } else if (myPlayerName && !playerName) {
+    } else if (myPlayerName) {
       setPlayerName(myPlayerName)
     }
-  }, [myPlayerName, playerName])
+  }, [myPlayerName])
 
   // Auto-fill lobby code from ?join=XXXXXX URL param
   useEffect(() => {
@@ -103,6 +108,8 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-6">
+      {showHowToPlay && <HowToPlayModal onClose={() => setShowHowToPlay(false)} />}
+
       <IngeniousBanner />
 
       <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm shadow-xl border border-[#312e6b]">
@@ -227,6 +234,19 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
 
         {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
       </div>
+
+      {/* How to Play link */}
+      <button
+        onClick={() => setShowHowToPlay(true)}
+        className="text-purple-400 hover:text-purple-300 text-sm underline underline-offset-2 transition-colors"
+      >
+        How to Play
+      </button>
+
+      {/* Legal disclaimer */}
+      <p className="text-gray-600 text-xs text-center max-w-sm px-2">
+        Ingenious is a board game originally designed by Reiner Knizia and published by Sophisticated Games Ltd. / Rio Grande Games. This fan-made web implementation is not affiliated with or endorsed by the original creators or rights holders.
+      </p>
     </div>
   )
 }
