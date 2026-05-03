@@ -18,6 +18,7 @@ import {
   unsubscribeFromPush,
   isSubscribed,
 } from '../../lib/pushNotifications'
+import { useColourBlindMode } from '../../hooks/useColourBlindMode'
 
 const COLOR_LABELS: Record<Color, string> = {
   red: 'Red', orange: 'Orange', yellow: 'Yellow',
@@ -36,9 +37,11 @@ const INGENIOUS_COLOR_HEX: Record<Color, string> = {
 const INGENIOUS_ANIMATION_DURATION_MS = 3000
 const TURN_ANIMATION_DURATION_MS = 2500
 
-export default function GameScreen() {
+export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => void }) {
   const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious, scoringAnimation } = useGameStore()
   const { myPlayerId, lobbyState } = useLobbyStore()
+
+  const [colourBlindMode, toggleColourBlindMode] = useColourBlindMode()
 
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
   const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
@@ -187,6 +190,18 @@ export default function GameScreen() {
             </button>
           )}
           <span>{gameState?.tileBagCount ?? 0} tiles left</span>
+          {/* Colour Blind Mode toggle */}
+          <button
+            onClick={toggleColourBlindMode}
+            title={colourBlindMode ? 'Disable Colour Blind Mode' : 'Enable Colour Blind Mode'}
+            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+              colourBlindMode
+                ? 'border-yellow-400 text-yellow-300 hover:border-yellow-300'
+                : 'border-gray-600 text-gray-400 hover:border-yellow-400 hover:text-yellow-300'
+            }`}
+          >
+            {colourBlindMode ? '◑ CBM' : '◑'}
+          </button>
         </div>
       </div>
 
@@ -248,6 +263,7 @@ export default function GameScreen() {
             onFlip={flipTile}
             onCancelPlacement={() => selectTile(null)}
             scoringAnimation={scoringAnimation}
+            colourBlindMode={colourBlindMode}
           />
         </div>
 
@@ -301,7 +317,7 @@ export default function GameScreen() {
           results={gameOver}
           myPlayerId={myPlayerId ?? ''}
           playerNames={playerNames}
-          onClose={() => useGameStore.getState().reset()}
+          onClose={onNavigateHome}
         />
       )}
     </div>

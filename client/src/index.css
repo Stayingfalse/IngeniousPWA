@@ -31,10 +31,17 @@ body {
   100% { opacity: 0; transform: scale(0.95); }
 }
 
-@keyframes scoring-ring {
-  0%   { opacity: 0.9; transform: scale(1); }
-  60%  { opacity: 0.6; transform: scale(1.08); }
-  100% { opacity: 0;   transform: scale(1.15); }
+@keyframes scoring-flash {
+  0%   { opacity: 0; transform: scale(1); }
+  12%  { opacity: 0.9; transform: scale(0.97); }
+  45%  { opacity: 0.65; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes scoring-ring-expand {
+  0%   { opacity: 0.95; transform: scale(0.82); }
+  35%  { opacity: 0.85; transform: scale(1.12); }
+  100% { opacity: 0; transform: scale(1.4); }
 }
 
 @keyframes floatUp {

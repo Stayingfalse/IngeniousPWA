@@ -30,8 +30,8 @@ export function isLegalPlacement(
   // Both hexes must be adjacent to each other
   if (!isAdjacent(hexA, hexB)) return false
 
-  // First move: at least one hex must be adjacent to an unused start symbol
   if (isFirstMove) {
+    // First move: at least one hex must be adjacent to an unused start symbol
     const startSymbols = startSymbolPositions(radius)
     const availableSymbols = startSymbols.filter(s => !usedStartSymbols.includes(key(s)))
 
@@ -40,6 +40,13 @@ export function isLegalPlacement(
     })
 
     if (!touchesAvailableStart) return false
+  } else {
+    // Non-first move: at least one hex must be adjacent to an already-occupied board cell
+    const touchesExistingTile =
+      HEX_DIRS.some(dir => board[key(add(hexA, dir))] !== undefined) ||
+      HEX_DIRS.some(dir => board[key(add(hexB, dir))] !== undefined)
+
+    if (!touchesExistingTile) return false
   }
 
   return true

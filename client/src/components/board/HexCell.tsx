@@ -1,4 +1,5 @@
 import type { Color } from '@ingenious/shared'
+import React from 'react'
 
 const COLOR_MAP: Record<Color, string> = {
   red: '#ef4444',
@@ -7,6 +8,79 @@ const COLOR_MAP: Record<Color, string> = {
   green: '#22c55e',
   blue: '#3b82f6',
   purple: '#a855f7',
+}
+
+// Unique shape/symbol per colour for colour-blind mode
+const CBM_SYMBOL: Record<Color, (cx: number, cy: number, size: number) => React.ReactNode> = {
+  red: (cx, cy, s) => {
+    // Circle
+    const r = s * 0.32
+    return <circle key="cbm" cx={cx} cy={cy} r={r} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.12} />
+  },
+  orange: (cx, cy, s) => {
+    // Diamond
+    const h = s * 0.3
+    return (
+      <rect
+        key="cbm"
+        x={cx - h}
+        y={cy - h}
+        width={h * 2}
+        height={h * 2}
+        fill="none"
+        stroke="rgba(0,0,0,0.55)"
+        strokeWidth={s * 0.12}
+        transform={`rotate(45 ${cx} ${cy})`}
+      />
+    )
+  },
+  yellow: (cx, cy, s) => {
+    // Triangle
+    const h = s * 0.36
+    const pts = `${cx},${cy - h} ${cx - h * 0.87},${cy + h * 0.5} ${cx + h * 0.87},${cy + h * 0.5}`
+    return <polygon key="cbm" points={pts} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.12} />
+  },
+  green: (cx, cy, s) => {
+    // Plus / cross
+    const arm = s * 0.3
+    const thick = s * 0.1
+    return (
+      <g key="cbm">
+        <rect x={cx - thick} y={cy - arm} width={thick * 2} height={arm * 2} fill="rgba(0,0,0,0.5)" />
+        <rect x={cx - arm} y={cy - thick} width={arm * 2} height={thick * 2} fill="rgba(0,0,0,0.5)" />
+      </g>
+    )
+  },
+  blue: (cx, cy, s) => {
+    // Three horizontal lines
+    const w = s * 0.5
+    const gap = s * 0.14
+    return (
+      <g key="cbm">
+        <line x1={cx - w / 2} y1={cy - gap} x2={cx + w / 2} y2={cy - gap} stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.1} />
+        <line x1={cx - w / 2} y1={cy} x2={cx + w / 2} y2={cy} stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.1} />
+        <line x1={cx - w / 2} y1={cy + gap} x2={cx + w / 2} y2={cy + gap} stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.1} />
+      </g>
+    )
+  },
+  purple: (cx, cy, s) => {
+    // Six-pointed star (two overlapping triangles)
+    const r = s * 0.35
+    const pts1 = Array.from({ length: 3 }, (_, i) => {
+      const a = (Math.PI * 2 * i) / 3 - Math.PI / 2
+      return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
+    }).join(' ')
+    const pts2 = Array.from({ length: 3 }, (_, i) => {
+      const a = (Math.PI * 2 * i) / 3 + Math.PI / 2
+      return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`
+    }).join(' ')
+    return (
+      <g key="cbm">
+        <polygon points={pts1} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.1} />
+        <polygon points={pts2} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={s * 0.1} />
+      </g>
+    )
+  },
 }
 
 function hexCornerPoints(cx: number, cy: number, size: number): string {
@@ -32,6 +106,7 @@ interface HexCellProps {
   isScoringRay?: boolean
   scoringColor?: Color
   scoringDelayMs?: number
+  colourBlindMode?: boolean
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -49,6 +124,7 @@ export default function HexCell({
   isScoringRay = false,
   scoringColor,
   scoringDelayMs = 0,
+  colourBlindMode = false,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -89,18 +165,40 @@ export default function HexCell({
         stroke={stroke}
         strokeWidth={isFirstSelected || isValidTarget ? 2 : 1}
       />
+
+      {/* Colour blind mode: unique shape overlay for coloured cells */}
+      {colourBlindMode && color && CBM_SYMBOL[color](x, y, size)}
+
+      {/* Scoring animation: bright flash + expanding ring */}
       {isScoringRay && (
-        <polygon
-          points={hexCornerPoints(x, y, size - 1)}
-          fill="none"
-          stroke={ringColor}
-          strokeWidth={3}
-          style={{
-            animation: `scoring-ring 1.5s ease-out ${scoringDelayMs}ms both`,
-            transformOrigin: `${x}px ${y}px`,
-          }}
-        />
+        <>
+          {/* Solid colour flash */}
+          <polygon
+            points={points}
+            fill={ringColor}
+            style={{
+              opacity: 0,
+              animation: `scoring-flash 1.8s ease-out ${scoringDelayMs}ms both`,
+              transformOrigin: `${x}px ${y}px`,
+              pointerEvents: 'none',
+            }}
+          />
+          {/* Expanding bold ring */}
+          <polygon
+            points={hexCornerPoints(x, y, size + 2)}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth={6}
+            style={{
+              opacity: 0,
+              animation: `scoring-ring-expand 1.8s ease-out ${scoringDelayMs}ms both`,
+              transformOrigin: `${x}px ${y}px`,
+              pointerEvents: 'none',
+            }}
+          />
+        </>
       )}
     </g>
   )
 }
+
