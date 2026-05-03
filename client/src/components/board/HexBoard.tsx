@@ -5,15 +5,7 @@ import HexCell from './HexCell'
 import TileGhost from './TileGhost'
 import ScoreFloats from './ScoreFloats'
 import type { ScoringAnimation } from '../../store/gameStore'
-
-const HEX_SIZE = 28
-
-function hexToPixel(q: number, r: number): { x: number; y: number } {
-  const x = HEX_SIZE * (3 / 2) * q
-  const y = HEX_SIZE * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r)
-  return { x, y }
-}
-
+import { HEX_SIZE, hexToPixel } from './hexUtils'
 
 interface HexBoardProps {
   board: Record<string, Color>
@@ -95,7 +87,7 @@ export default function HexBoard({
       }
     }
     return map
-  }, [scoringAnimation])
+  }, [scoringAnimation?.rayHexes])
 
   // When a tile is selected, compute every hex that is part of a legal placement
   const validTargetKeys = useMemo(() => {
