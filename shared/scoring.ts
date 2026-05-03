@@ -64,6 +64,40 @@ export function scoreMove(
   return result
 }
 
+/**
+ * Score a single hex and return the cells visited in each ray.
+ * excludeDir: the direction toward the partner hex (skip this direction).
+ * Returns an array of rays, each with the direction and cells found.
+ * Only rays with at least one cell are included.
+ */
+export function scoreRays(
+  coord: AxialCoord,
+  color: Color,
+  board: Record<string, Color>,
+  excludeDir: AxialCoord | null,
+): Array<{ dir: AxialCoord; cells: AxialCoord[] }> {
+  const rays: Array<{ dir: AxialCoord; cells: AxialCoord[] }> = []
+
+  for (const dir of HEX_DIRS) {
+    if (excludeDir && dir.q === excludeDir.q && dir.r === excludeDir.r) {
+      continue
+    }
+
+    const cells: AxialCoord[] = []
+    let pos = add(coord, dir)
+    while (board[key(pos)] === color) {
+      cells.push(pos)
+      pos = add(pos, dir)
+    }
+
+    if (cells.length > 0) {
+      rays.push({ dir, cells })
+    }
+  }
+
+  return rays
+}
+
 export function emptyScores(): Record<Color, number> {
   return { red: 0, orange: 0, yellow: 0, green: 0, blue: 0, purple: 0 }
 }

@@ -1,4 +1,4 @@
-import type { GameState, Color, Tile } from './types'
+import type { GameState, Color, Tile, LastMove } from './types'
 import type { AxialCoord } from './hexGrid'
 import {
   key, add, isAdjacent, inBounds, allHexes, startSymbolPositions, HEX_DIRS, dirBetween,
@@ -82,7 +82,7 @@ export function checkWinCondition(state: GameState): string | null {
   return null
 }
 
-export function maskGameState(state: GameState, viewingPlayerId: string, turnDeadline: number | null = null) {
+export function maskGameState(state: GameState, viewingPlayerId: string, turnDeadline: number | null = null, lastMove?: LastMove) {
   const otherRackSizes: Record<string, number> = {}
   for (const pid of state.playerOrder) {
     if (pid !== viewingPlayerId) {
@@ -97,6 +97,7 @@ export function maskGameState(state: GameState, viewingPlayerId: string, turnDea
     myRack: playerRacks[viewingPlayerId] ?? [],
     otherRackSizes,
     turnDeadline,
+    lastMove,
   }
 }
 

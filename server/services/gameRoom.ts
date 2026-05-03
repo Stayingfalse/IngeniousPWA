@@ -7,6 +7,7 @@ import type {
   ServerMessage,
   AxialCoord,
   Tile,
+  LastMove,
 } from '@ingenious/shared'
 import {
   applyMove,
@@ -61,6 +62,8 @@ export class GameRoom {
   private turnDeadline: number | null = null
   // Player display names for push notification messages
   private playerNames: Map<string, string> = new Map()
+  // Last move info, broadcast once then cleared
+  private pendingLastMove: LastMove | undefined = undefined
 
   constructor(
     lobbyId: string,
@@ -112,8 +115,10 @@ export class GameRoom {
   }
 
   broadcastState(): void {
+    const lastMove = this.pendingLastMove
+    this.pendingLastMove = undefined
     for (const playerId of this.state.playerOrder) {
-      const masked = maskGameState(this.state, playerId, this.turnDeadline)
+      const masked = maskGameState(this.state, playerId, this.turnDeadline, lastMove)
       this.send(playerId, { type: 'STATE_UPDATE', state: masked })
     }
   }
@@ -138,6 +143,10 @@ export class GameRoom {
       return
     }
 
+    // Capture tile colors before applyMove removes it from the rack
+    const rack = this.state.playerRacks[playerId]
+    const tile = rack?.[tileIndex]
+
     let result: ReturnType<typeof applyMove>
     try {
       result = applyMove(this.state, playerId, tileIndex, hexA, hexB)
@@ -149,8 +158,19 @@ export class GameRoom {
 
     this.clearTurnTimer()
 
-    const { newState, ingenious } = result
+    const { newState, scoreDelta, ingenious } = result
     this.state = newState
+
+    // Store last-move info for the next broadcastState call
+    if (tile) {
+      this.pendingLastMove = {
+        hexA,
+        hexB,
+        colorA: tile.colorA,
+        colorB: tile.colorB,
+        scoreDelta,
+      }
+    }
 
     // Announce INGENIOUS! events
     for (const color of ingenious) {

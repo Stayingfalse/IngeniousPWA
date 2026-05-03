@@ -3,6 +3,8 @@ import type { Color, Tile, AxialCoord } from '@ingenious/shared'
 import { allHexes, startSymbolPositions, key, isAdjacent, inBounds, getLegalPlacements } from '@ingenious/shared'
 import HexCell from './HexCell'
 import TileGhost from './TileGhost'
+import ScoreFloats from './ScoreFloats'
+import type { ScoringAnimation } from '../../store/gameStore'
 
 const HEX_SIZE = 28
 
@@ -23,6 +25,7 @@ interface HexBoardProps {
   isFirstMove: boolean
   usedStartSymbols: string[]
   onTilePlaced: (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => void
+  scoringAnimation: ScoringAnimation | null
 }
 
 export default function HexBoard({
@@ -35,6 +38,7 @@ export default function HexBoard({
   isFirstMove,
   usedStartSymbols,
   onTilePlaced,
+  scoringAnimation,
 }: HexBoardProps) {
   const [hoveredHex, setHoveredHex] = useState<AxialCoord | null>(null)
   const [firstHex, setFirstHex] = useState<AxialCoord | null>(null)
@@ -81,6 +85,18 @@ export default function HexBoard({
 
   const selectedTile = selectedTileIndex !== null ? myRack[selectedTileIndex] : null
 
+  // Build a map from hex key → { color, delayMs } for scoring ray highlights
+  const scoringRayMap = useMemo(() => {
+    const map = new Map<string, { color: Color; delayMs: number }>()
+    if (!scoringAnimation) return map
+    for (const ray of scoringAnimation.rayHexes) {
+      for (const { coord, delayMs } of ray.cells) {
+        map.set(key(coord), { color: ray.color, delayMs })
+      }
+    }
+    return map
+  }, [scoringAnimation])
+
   // When a tile is selected, compute every hex that is part of a legal placement
   const validTargetKeys = useMemo(() => {
     if (!isMyTurn || selectedTileIndex === null) return new Set<string>()
@@ -114,6 +130,7 @@ export default function HexBoard({
         const isGhostA = ghostHexA && key(ghostHexA) === k
         const isGhostB = ghostHexB && key(ghostHexB) === k
         const isFirstSelected = firstHex && key(firstHex) === k
+        const scoringRay = scoringRayMap.get(k)
 
         return (
           <HexCell
@@ -126,6 +143,9 @@ export default function HexBoard({
             isSelectable={isMyTurn && selectedTileIndex !== null && !color}
             isFirstSelected={!!isFirstSelected}
             isValidTarget={!color && !isFirstSelected && validTargetKeys.has(k)}
+            isScoringRay={!!scoringRay}
+            scoringColor={scoringRay?.color}
+            scoringDelayMs={scoringRay?.delayMs}
             onClick={() => handleHexClick(hex)}
             onMouseEnter={() => handleHexHover(hex)}
             onMouseLeave={() => handleHexHover(null)}
@@ -156,6 +176,14 @@ export default function HexBoard({
           />
         )
       })()}
+
+      {/* Floating +n score labels */}
+      {scoringAnimation && (
+        <ScoreFloats
+          labels={scoringAnimation.floatingLabels}
+          animationKey={scoringAnimation.startedAt}
+        />
+      )}
     </svg>
   )
 }

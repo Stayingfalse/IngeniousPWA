@@ -21,11 +21,20 @@ export type GameState = {
   radius: number
 }
 
+export type LastMove = {
+  hexA: AxialCoord
+  hexB: AxialCoord
+  colorA: Color
+  colorB: Color
+  scoreDelta: Record<Color, number>
+}
+
 export type MaskedGameState = Omit<GameState, 'tileBag' | 'playerRacks'> & {
   tileBagCount: number
   myRack: Tile[]
   otherRackSizes: Record<string, number>
   turnDeadline: number | null
+  lastMove?: LastMove
 }
 
 export type PlayerInfo = {

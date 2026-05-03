@@ -37,7 +37,7 @@ const INGENIOUS_ANIMATION_DURATION_MS = 3000
 const TURN_ANIMATION_DURATION_MS = 2500
 
 export default function GameScreen() {
-  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious } = useGameStore()
+  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious, scoringAnimation } = useGameStore()
   const { myPlayerId, lobbyState } = useLobbyStore()
 
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
@@ -271,6 +271,7 @@ export default function GameScreen() {
             isFirstMove={isFirstMove}
             usedStartSymbols={usedStartSymbols}
             onTilePlaced={handleTilePlaced}
+            scoringAnimation={scoringAnimation}
           />
         </div>
 
@@ -282,6 +283,7 @@ export default function GameScreen() {
             myPlayerId={myPlayerId ?? ''}
             playerNames={playerNames}
             currentPlayerId={gameState?.currentPlayerId ?? ''}
+            flashColors={scoringAnimation?.flashColors}
           />
         </div>
       </div>
