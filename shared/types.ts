@@ -35,6 +35,7 @@ export type MaskedGameState = Omit<GameState, 'tileBag' | 'playerRacks'> & {
   otherRackSizes: Record<string, number>
   turnDeadline: number | null
   lastMove?: LastMove
+  swapAvailable?: boolean
 }
 
 export type PlayerInfo = {
@@ -66,6 +67,7 @@ export type ClientMessage =
   | { type: 'START_GAME' }
   | { type: 'PLACE_TILE'; tileIndex: number; hexA: AxialCoord; hexB: AxialCoord }
   | { type: 'SWAP_RACK' }
+  | { type: 'DECLINE_SWAP' }
   | { type: 'CHANGE_NAME'; name: string }
   | { type: 'REQUEST_SYNC' }
   | { type: 'PING' }
