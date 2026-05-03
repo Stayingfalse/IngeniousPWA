@@ -1,17 +1,12 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import type { Color, Tile, AxialCoord } from '@ingenious/shared'
 import { allHexes, startSymbolPositions, key, isAdjacent, inBounds, getLegalPlacements } from '@ingenious/shared'
 import HexCell from './HexCell'
 import TileGhost from './TileGhost'
-
-const HEX_SIZE = 28
-
-function hexToPixel(q: number, r: number): { x: number; y: number } {
-  const x = HEX_SIZE * (3 / 2) * q
-  const y = HEX_SIZE * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r)
-  return { x, y }
-}
-
+import TilePlacementPopup from './TilePlacementPopup'
+import ScoreFloats from './ScoreFloats'
+import type { ScoringAnimation } from '../../store/gameStore'
+import { HEX_SIZE, hexToPixel } from './hexUtils'
 
 interface HexBoardProps {
   board: Record<string, Color>
@@ -23,6 +18,9 @@ interface HexBoardProps {
   isFirstMove: boolean
   usedStartSymbols: string[]
   onTilePlaced: (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => void
+  onFlip: () => void
+  onCancelPlacement: () => void
+  scoringAnimation: ScoringAnimation | null
 }
 
 export default function HexBoard({
@@ -35,9 +33,19 @@ export default function HexBoard({
   isFirstMove,
   usedStartSymbols,
   onTilePlaced,
+  onFlip,
+  onCancelPlacement,
+  scoringAnimation,
 }: HexBoardProps) {
   const [hoveredHex, setHoveredHex] = useState<AxialCoord | null>(null)
   const [firstHex, setFirstHex] = useState<AxialCoord | null>(null)
+  const [pendingSecondHex, setPendingSecondHex] = useState<AxialCoord | null>(null)
+
+  // Clear pending state when the selected tile changes
+  useEffect(() => {
+    setFirstHex(null)
+    setPendingSecondHex(null)
+  }, [selectedTileIndex])
 
   const hexes = allHexes(radius)
   const startSymbols = startSymbolPositions(radius)
@@ -55,22 +63,38 @@ export default function HexBoard({
   const handleHexClick = useCallback(
     (coord: AxialCoord) => {
       if (!isMyTurn || selectedTileIndex === null) return
+      // When popup is showing, ignore board clicks – use popup buttons instead
+      if (pendingSecondHex) return
       if (board[key(coord)] !== undefined) return
 
       if (!firstHex) {
         setFirstHex(coord)
       } else {
         if (isAdjacent(firstHex, coord) && board[key(coord)] === undefined) {
-          onTilePlaced(selectedTileIndex, firstHex, coord)
-          setFirstHex(null)
+          // Show confirmation popup instead of submitting immediately
+          setPendingSecondHex(coord)
         } else {
-          // Restart selection
+          // Restart selection with the new hex
           setFirstHex(coord)
         }
       }
     },
-    [isMyTurn, selectedTileIndex, board, firstHex, onTilePlaced],
+    [isMyTurn, selectedTileIndex, board, firstHex, pendingSecondHex],
   )
+
+  const handlePopupConfirm = useCallback(() => {
+    if (firstHex && pendingSecondHex && selectedTileIndex !== null) {
+      onTilePlaced(selectedTileIndex, firstHex, pendingSecondHex)
+      setFirstHex(null)
+      setPendingSecondHex(null)
+    }
+  }, [firstHex, pendingSecondHex, selectedTileIndex, onTilePlaced])
+
+  const handlePopupCancel = useCallback(() => {
+    setFirstHex(null)
+    setPendingSecondHex(null)
+    onCancelPlacement()
+  }, [onCancelPlacement])
 
   const handleHexHover = useCallback(
     (coord: AxialCoord | null) => {
@@ -80,6 +104,18 @@ export default function HexBoard({
   )
 
   const selectedTile = selectedTileIndex !== null ? myRack[selectedTileIndex] : null
+
+  // Build a map from hex key → { color, delayMs } for scoring ray highlights
+  const scoringRayMap = useMemo(() => {
+    const map = new Map<string, { color: Color; delayMs: number }>()
+    if (!scoringAnimation) return map
+    for (const ray of scoringAnimation.rayHexes) {
+      for (const { coord, delayMs } of ray.cells) {
+        map.set(key(coord), { color: ray.color, delayMs })
+      }
+    }
+    return map
+  }, [scoringAnimation?.startedAt])
 
   // When a tile is selected, compute every hex that is part of a legal placement
   const validTargetKeys = useMemo(() => {
@@ -94,11 +130,12 @@ export default function HexBoard({
   }, [isMyTurn, selectedTileIndex, board, radius, isFirstMove, usedStartSymbols])
 
   // Determine ghost hexes
+  // When pendingSecondHex is set (popup showing), lock ghosts at both positions
   const ghostHexA = firstHex
-  const ghostHexB =
-    firstHex && hoveredHex && isAdjacent(firstHex, hoveredHex) && board[key(hoveredHex)] === undefined
+  const ghostHexB = pendingSecondHex ??
+    (firstHex && hoveredHex && isAdjacent(firstHex, hoveredHex) && board[key(hoveredHex)] === undefined
       ? hoveredHex
-      : null
+      : null)
 
   return (
     <svg
@@ -114,6 +151,7 @@ export default function HexBoard({
         const isGhostA = ghostHexA && key(ghostHexA) === k
         const isGhostB = ghostHexB && key(ghostHexB) === k
         const isFirstSelected = firstHex && key(firstHex) === k
+        const scoringRay = scoringRayMap.get(k)
 
         return (
           <HexCell
@@ -123,9 +161,12 @@ export default function HexBoard({
             size={HEX_SIZE - 1}
             color={color}
             isStart={isStart && !color}
-            isSelectable={isMyTurn && selectedTileIndex !== null && !color}
-            isFirstSelected={!!isFirstSelected}
-            isValidTarget={!color && !isFirstSelected && validTargetKeys.has(k)}
+            isSelectable={isMyTurn && selectedTileIndex !== null && !color && !pendingSecondHex}
+            isFirstSelected={!!isFirstSelected && !pendingSecondHex}
+            isValidTarget={!color && !isFirstSelected && !pendingSecondHex && validTargetKeys.has(k)}
+            isScoringRay={!!scoringRay}
+            scoringColor={scoringRay?.color}
+            scoringDelayMs={scoringRay?.delayMs}
             onClick={() => handleHexClick(hex)}
             onMouseEnter={() => handleHexHover(hex)}
             onMouseLeave={() => handleHexHover(null)}
@@ -156,6 +197,29 @@ export default function HexBoard({
           />
         )
       })()}
+
+      {/* Tile placement confirmation popup */}
+      {firstHex && pendingSecondHex && (() => {
+        const hexAPos = hexToPixel(firstHex.q, firstHex.r)
+        const hexBPos = hexToPixel(pendingSecondHex.q, pendingSecondHex.r)
+        return (
+          <TilePlacementPopup
+            hexAPos={hexAPos}
+            hexBPos={hexBPos}
+            onFlip={onFlip}
+            onConfirm={handlePopupConfirm}
+            onCancel={handlePopupCancel}
+          />
+        )
+      })()}
+
+      {/* Floating +n score labels */}
+      {scoringAnimation && (
+        <ScoreFloats
+          labels={scoringAnimation.floatingLabels}
+          animationKey={scoringAnimation.startedAt}
+        />
+      )}
     </svg>
   )
 }

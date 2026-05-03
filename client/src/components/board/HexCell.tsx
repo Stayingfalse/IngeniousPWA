@@ -29,6 +29,9 @@ interface HexCellProps {
   isSelectable?: boolean
   isFirstSelected?: boolean
   isValidTarget?: boolean
+  isScoringRay?: boolean
+  scoringColor?: Color
+  scoringDelayMs?: number
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -43,6 +46,9 @@ export default function HexCell({
   isSelectable = false,
   isFirstSelected = false,
   isValidTarget = false,
+  isScoringRay = false,
+  scoringColor,
+  scoringDelayMs = 0,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -68,6 +74,8 @@ export default function HexCell({
         ? 'rgba(168,85,247,0.3)'
         : '#312e6b'
 
+  const ringColor = scoringColor ? COLOR_MAP[scoringColor] : '#ffffff'
+
   return (
     <g
       onClick={onClick}
@@ -81,6 +89,18 @@ export default function HexCell({
         stroke={stroke}
         strokeWidth={isFirstSelected || isValidTarget ? 2 : 1}
       />
+      {isScoringRay && (
+        <polygon
+          points={hexCornerPoints(x, y, size - 1)}
+          fill="none"
+          stroke={ringColor}
+          strokeWidth={3}
+          style={{
+            animation: `scoring-ring 1.5s ease-out ${scoringDelayMs}ms both`,
+            transformOrigin: `${x}px ${y}px`,
+          }}
+        />
+      )}
     </g>
   )
 }

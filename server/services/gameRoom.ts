@@ -7,6 +7,7 @@ import type {
   ServerMessage,
   AxialCoord,
   Tile,
+  LastMove,
 } from '@ingenious/shared'
 import {
   applyMove,
@@ -61,6 +62,10 @@ export class GameRoom {
   private turnDeadline: number | null = null
   // Player display names for push notification messages
   private playerNames: Map<string, string> = new Map()
+  // Last move info, broadcast once then cleared
+  private pendingLastMove: LastMove | undefined = undefined
+  // Pending swap: set after placement when rack lacks lowest-color tile
+  private pendingSwapPlayerId: string | null = null
 
   constructor(
     lobbyId: string,
@@ -112,14 +117,18 @@ export class GameRoom {
   }
 
   broadcastState(): void {
+    const lastMove = this.pendingLastMove
+    this.pendingLastMove = undefined
     for (const playerId of this.state.playerOrder) {
-      const masked = maskGameState(this.state, playerId, this.turnDeadline)
+      const swapAvailable = this.pendingSwapPlayerId === playerId
+      const masked = maskGameState(this.state, playerId, this.turnDeadline, lastMove, swapAvailable)
       this.send(playerId, { type: 'STATE_UPDATE', state: masked })
     }
   }
 
   getMaskedState(playerId: string): MaskedGameState {
-    return maskGameState(this.state, playerId, this.turnDeadline)
+    const swapAvailable = this.pendingSwapPlayerId === playerId
+    return maskGameState(this.state, playerId, this.turnDeadline, undefined, swapAvailable)
   }
 
   handlePlaceTile(
@@ -138,6 +147,10 @@ export class GameRoom {
       return
     }
 
+    // Capture tile colors before applyMove removes it from the rack
+    const rack = this.state.playerRacks[playerId]
+    const tile = rack?.[tileIndex]
+
     let result: ReturnType<typeof applyMove>
     try {
       result = applyMove(this.state, playerId, tileIndex, hexA, hexB)
@@ -149,8 +162,19 @@ export class GameRoom {
 
     this.clearTurnTimer()
 
-    const { newState, ingenious } = result
+    const { newState, scoreDelta, ingenious } = result
     this.state = newState
+
+    // Store last-move info for the next broadcastState call
+    if (tile) {
+      this.pendingLastMove = {
+        hexA,
+        hexB,
+        colorA: tile.colorA,
+        colorB: tile.colorB,
+        scoreDelta,
+      }
+    }
 
     // Announce INGENIOUS! events
     for (const color of ingenious) {
@@ -176,28 +200,20 @@ export class GameRoom {
   }
 
   handleSwapRack(playerId: string): void {
-    if (this.state.currentPlayerId !== playerId) {
-      this.send(playerId, { type: 'ERROR', code: 'NOT_YOUR_TURN', message: 'Not your turn' })
-      return
-    }
-
-    const playerScores = this.state.scores[playerId]
-    const minColor = findMinColor(playerScores)
-    const rack = this.state.playerRacks[playerId] || []
-    const hasMinColor = rack.some(t => t.colorA === minColor || t.colorB === minColor)
-
-    if (hasMinColor) {
+    // Swap is only valid as a post-placement action when it was flagged pending
+    if (this.pendingSwapPlayerId !== playerId) {
       this.send(playerId, {
         type: 'ERROR',
         code: 'CANNOT_SWAP',
-        message: 'Cannot swap: rack contains lowest-scoring color',
+        message: 'Swap is only available after placing a tile when your refilled rack contains no tiles of your lowest-scoring color',
       })
       return
     }
 
-    this.clearTurnTimer()
+    this.pendingSwapPlayerId = null
 
-    // Return rack to bag and draw 6 new tiles
+    // Return rack to bag, shuffle, then draw 6 new tiles
+    const rack = this.state.playerRacks[playerId] || []
     let bag = [...this.state.tileBag, ...rack]
     for (let i = bag.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
@@ -214,8 +230,31 @@ export class GameRoom {
 
     this.send(playerId, { type: 'YOUR_NEW_RACK', rack: drawn })
     this.advanceTurn(playerId)
-    this.startTurnTimer()
-    this.notifyCurrentPlayerIfOffline()
+    this.checkForNoMoves()
+    if (this.state.status === 'in_progress') {
+      this.startTurnTimer()
+      this.notifyCurrentPlayerIfOffline()
+    }
+    this.broadcastState()
+  }
+
+  handleDeclineSwap(playerId: string): void {
+    if (this.pendingSwapPlayerId !== playerId) {
+      this.send(playerId, {
+        type: 'ERROR',
+        code: 'NO_SWAP_PENDING',
+        message: 'No swap is pending for this player',
+      })
+      return
+    }
+
+    this.pendingSwapPlayerId = null
+    this.advanceTurn(playerId)
+    this.checkForNoMoves()
+    if (this.state.status === 'in_progress') {
+      this.startTurnTimer()
+      this.notifyCurrentPlayerIfOffline()
+    }
     this.broadcastState()
   }
 
@@ -237,6 +276,19 @@ export class GameRoom {
     }
 
     if (advanceTurn) {
+      // Check if the refilled rack lacks the lowest-scoring color → offer a swap
+      const playerScores = this.state.scores[playerId]
+      const minColor = findMinColor(playerScores)
+      const currentRack = this.state.playerRacks[playerId] || []
+      const hasMinColor = currentRack.some(t => t.colorA === minColor || t.colorB === minColor)
+
+      if (currentRack.length > 0 && !hasMinColor) {
+        // Swap available — hold the turn, let the player decide
+        this.pendingSwapPlayerId = playerId
+        this.broadcastState()
+        return
+      }
+
       this.advanceTurn(playerId)
     }
 

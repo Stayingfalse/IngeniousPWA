@@ -37,7 +37,7 @@ const INGENIOUS_ANIMATION_DURATION_MS = 3000
 const TURN_ANIMATION_DURATION_MS = 2500
 
 export default function GameScreen() {
-  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious } = useGameStore()
+  const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious, scoringAnimation } = useGameStore()
   const { myPlayerId, lobbyState } = useLobbyStore()
 
   const isMyTurn = gameState?.currentPlayerId === myPlayerId
@@ -48,27 +48,8 @@ export default function GameScreen() {
   // Show tutorial for first-time players
   const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('hasSeenTutorial'))
 
-  // Rack-swap eligibility prompt
-  const [showSwapPrompt, setShowSwapPrompt] = useState(false)
-  const swapPromptShownForTurn = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!isMyTurn || !myPlayerId || !gameState) {
-      setShowSwapPrompt(false)
-      return
-    }
-    const turnKey = `${myPlayerId}-${gameState.moveCount}`
-    if (swapPromptShownForTurn.current === turnKey) return
-    swapPromptShownForTurn.current = turnKey
-
-    const scores = gameState.scores[myPlayerId]
-    if (!scores) return
-    const minColor = findMinColor(scores)
-    const hasMinColor = myRack.some(t => t.colorA === minColor || t.colorB === minColor)
-    if (!hasMinColor && myRack.length > 0) {
-      setShowSwapPrompt(true)
-    }
-  }, [isMyTurn, myPlayerId, gameState, myRack])
+  // Swap prompt is driven by server-side swapAvailable flag (end-of-turn check)
+  const showSwapPrompt = !!gameState?.swapAvailable
 
   // Turn / Ingenious notification overlay
   const [showTurnNotification, setShowTurnNotification] = useState(false)
@@ -143,24 +124,18 @@ export default function GameScreen() {
     setPushLoading(false)
   }
 
-  const handleHexClick = (_coord: AxialCoord) => {
-    if (!isMyTurn || selectedTileIndex === null) return
-  }
-
   const handleTilePlaced = (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => {
     const [a, b] = tileFlipped ? [hexB, hexA] : [hexA, hexB]
     wsClient.send({ type: 'PLACE_TILE', tileIndex, hexA: a, hexB: b })
     selectTile(null)
-    setShowSwapPrompt(false)
   }
 
   const handleSwapRack = () => {
     wsClient.send({ type: 'SWAP_RACK' })
-    setShowSwapPrompt(false)
   }
 
   const handleDeclineSwap = () => {
-    setShowSwapPrompt(false)
+    wsClient.send({ type: 'DECLINE_SWAP' })
   }
 
   const playerNames = Object.fromEntries(
@@ -255,7 +230,6 @@ export default function GameScreen() {
             onSelect={selectTile}
             onFlip={flipTile}
             isMyTurn={isMyTurn}
-            onSwap={handleSwapRack}
           />
         </div>
 
@@ -271,6 +245,9 @@ export default function GameScreen() {
             isFirstMove={isFirstMove}
             usedStartSymbols={usedStartSymbols}
             onTilePlaced={handleTilePlaced}
+            onFlip={flipTile}
+            onCancelPlacement={() => selectTile(null)}
+            scoringAnimation={scoringAnimation}
           />
         </div>
 
@@ -282,6 +259,7 @@ export default function GameScreen() {
             myPlayerId={myPlayerId ?? ''}
             playerNames={playerNames}
             currentPlayerId={gameState?.currentPlayerId ?? ''}
+            flashColors={scoringAnimation?.flashColors}
           />
         </div>
       </div>

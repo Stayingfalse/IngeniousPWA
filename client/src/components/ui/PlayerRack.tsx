@@ -28,10 +28,9 @@ interface PlayerRackProps {
   onSelect: (index: number | null) => void
   onFlip: () => void
   isMyTurn: boolean
-  onSwap: () => void
 }
 
-export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect, onFlip, isMyTurn, onSwap }: PlayerRackProps) {
+export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect, onFlip, isMyTurn }: PlayerRackProps) {
   const hexSize = 28
   const hexHeight = hexSize * Math.sqrt(3) / 2
   const tileWidth = hexSize + 2
@@ -95,16 +94,6 @@ export default function PlayerRack({ tiles, selectedIndex, tileFlipped, onSelect
           title="Flip tile orientation"
         >
           ↻ Flip
-        </button>
-      )}
-
-      {isMyTurn && (
-        <button
-          onClick={onSwap}
-          className="text-xs text-gray-400 hover:text-white border border-gray-600 hover:border-gray-400 px-2 py-1 rounded transition-colors portrait:ml-2 landscape:ml-0"
-          title="Swap rack (only if no tiles match lowest-scoring color)"
-        >
-          Swap
         </button>
       )}
     </div>

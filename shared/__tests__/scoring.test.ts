@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { scoreHex, scoreMove, emptyScores, addScores } from '../scoring'
+import { scoreHex, scoreMove, scoreRays, emptyScores, addScores } from '../scoring'
 import type { Color } from '../types'
 
 describe('scoring', () => {
@@ -84,6 +84,57 @@ describe('scoring', () => {
       const scores = scoreMove({ q: 0, r: 0 }, { q: 1, r: 0 }, 'red', 'red', board)
       // Both hexes are red; each gets scored independently
       expect(scores['red']).toBeGreaterThanOrEqual(0)
+    })
+  })
+
+  describe('scoreRays', () => {
+    it('returns empty array when no same-color neighbors', () => {
+      const board: Record<string, Color> = { '0,0': 'red' }
+      const rays = scoreRays({ q: 1, r: 0 }, 'blue', board, null)
+      expect(rays).toHaveLength(0)
+    })
+
+    it('returns cells in the matching ray', () => {
+      const board: Record<string, Color> = {
+        '0,0': 'red',
+        '2,0': 'red',
+        '3,0': 'red',
+      }
+      // Scoring hex at (1,0) with color red, no exclude
+      const rays = scoreRays({ q: 1, r: 0 }, 'red', board, null)
+      // Left ray: (0,0) = 1 cell; right ray: (2,0), (3,0) = 2 cells
+      expect(rays.length).toBeGreaterThanOrEqual(2)
+      const allCells = rays.flatMap(r => r.cells)
+      expect(allCells.some(c => c.q === 0 && c.r === 0)).toBe(true)
+      expect(allCells.some(c => c.q === 2 && c.r === 0)).toBe(true)
+      expect(allCells.some(c => c.q === 3 && c.r === 0)).toBe(true)
+    })
+
+    it('excludes direction toward partner hex', () => {
+      const board: Record<string, Color> = {
+        '1,0': 'red',
+        '-1,0': 'red',
+      }
+      // Exclude direction (1,0) toward partner
+      const rays = scoreRays({ q: 0, r: 0 }, 'red', board, { q: 1, r: 0 })
+      const allCells = rays.flatMap(r => r.cells)
+      // Should include (-1,0) but not (1,0)
+      expect(allCells.some(c => c.q === -1 && c.r === 0)).toBe(true)
+      expect(allCells.some(c => c.q === 1 && c.r === 0)).toBe(false)
+    })
+
+    it('total cell count matches scoreHex result', () => {
+      const board: Record<string, Color> = {
+        '-1,0': 'blue',
+        '-2,0': 'blue',
+        '0,1': 'blue',
+      }
+      const coord = { q: 0, r: 0 }
+      const excludeDir = { q: 1, r: 0 }
+      const total = scoreHex(coord, 'blue', board, excludeDir)
+      const rays = scoreRays(coord, 'blue', board, excludeDir)
+      const raysTotal = rays.reduce((sum, r) => sum + r.cells.length, 0)
+      expect(raysTotal).toBe(total)
     })
   })
 

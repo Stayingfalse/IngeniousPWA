@@ -17,6 +17,7 @@ interface ScorePanelProps {
   myPlayerId: string
   playerNames: Record<string, string>
   currentPlayerId: string
+  flashColors?: Set<Color>
 }
 
 export default function ScorePanel({
@@ -25,6 +26,7 @@ export default function ScorePanel({
   myPlayerId,
   playerNames,
   currentPlayerId,
+  flashColors,
 }: ScorePanelProps) {
   return (
     <>
@@ -54,6 +56,7 @@ export default function ScorePanel({
                   {COLORS.map(color => {
                     const score = playerScores[color] ?? 0
                     const { bg, text } = COLOR_STYLES[color]
+                    const isFlashing = flashColors?.has(color) ?? false
                     return (
                       <div
                         key={color}
@@ -62,7 +65,11 @@ export default function ScorePanel({
                       >
                         <div
                           className="w-4 h-4 rounded-sm flex items-center justify-center text-[9px] font-bold"
-                          style={{ backgroundColor: bg, color: text }}
+                          style={{
+                            backgroundColor: bg,
+                            color: text,
+                            animation: isFlashing ? 'score-flash 600ms ease-out 1200ms both' : undefined,
+                          }}
                         >
                           {score}
                         </div>
@@ -103,13 +110,19 @@ export default function ScorePanel({
                     const score = playerScores[color] ?? 0
                     const pct = Math.min(100, (score / 18) * 100)
                     const { bg } = COLOR_STYLES[color]
+                    const isFlashing = flashColors?.has(color) ?? false
 
                     return (
                       <div key={color} className="flex flex-col items-center gap-0.5">
                         <div className="w-full h-12 bg-[#0f0e17] rounded-sm relative overflow-hidden">
                           <div
                             className="absolute bottom-0 w-full rounded-sm transition-all duration-500"
-                            style={{ height: `${pct}%`, backgroundColor: bg }}
+                            style={{
+                              height: `${pct}%`,
+                              backgroundColor: bg,
+                              animation: isFlashing ? 'score-flash 600ms ease-out 1200ms both' : undefined,
+                              color: bg,
+                            }}
                           />
                         </div>
                         <span className="text-[9px] text-gray-400">{score}</span>

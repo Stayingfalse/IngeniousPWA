@@ -30,3 +30,22 @@ body {
   78%  { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(0.95); }
 }
+
+@keyframes scoring-ring {
+  0%   { opacity: 0.9; transform: scale(1); }
+  60%  { opacity: 0.6; transform: scale(1.08); }
+  100% { opacity: 0;   transform: scale(1.15); }
+}
+
+@keyframes floatUp {
+  0%   { opacity: 0; transform: translateY(0); }
+  15%  { opacity: 1; transform: translateY(-4px); }
+  70%  { opacity: 1; transform: translateY(-18px); }
+  100% { opacity: 0; transform: translateY(-30px); }
+}
+
+@keyframes score-flash {
+  0%   { filter: brightness(1) drop-shadow(0 0 0px transparent); transform: scaleY(1); }
+  30%  { filter: brightness(1.6) drop-shadow(0 0 6px currentColor); transform: scaleY(1.05); }
+  100% { filter: brightness(1) drop-shadow(0 0 0px transparent); transform: scaleY(1); }
+}
