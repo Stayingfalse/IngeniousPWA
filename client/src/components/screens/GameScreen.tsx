@@ -7,6 +7,7 @@ import ScorePanel from '../ui/ScorePanel'
 import TurnIndicator from '../ui/TurnIndicator'
 import GameOverModal from '../ui/GameOverModal'
 import IngeniousBanner from '../ui/IngeniousBanner'
+import TutorialOverlay from '../ui/TutorialOverlay'
 import { wsClient } from '../../lib/wsClient'
 import type { AxialCoord, Color } from '@ingenious/shared'
 import { findMinColor } from '@ingenious/shared'
@@ -31,6 +32,9 @@ export default function GameScreen() {
   const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
   const usedStartSymbols = gameState?.usedStartSymbols ?? []
   const isAsyncMode = lobbyState?.turnMode === 'async'
+
+  // Show tutorial for first-time players
+  const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('hasSeenTutorial'))
 
   // Rack-swap eligibility prompt
   const [showSwapPrompt, setShowSwapPrompt] = useState(false)
@@ -245,6 +249,8 @@ export default function GameScreen() {
           />
         </div>
       </div>
+
+      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
 
       {gameOver && (
         <GameOverModal
