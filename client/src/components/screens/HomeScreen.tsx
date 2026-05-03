@@ -36,7 +36,7 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
     if (nameInitialized.current) return
     nameInitialized.current = true
     const savedName = localStorage.getItem('playerName')
-    if (savedName) {
+    if (savedName && savedName.trim()) {
       setPlayerName(savedName)
     } else if (myPlayerName) {
       setPlayerName(myPlayerName)
