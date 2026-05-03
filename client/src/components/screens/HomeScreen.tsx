@@ -41,8 +41,7 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
     } else if (myPlayerName) {
       setPlayerName(myPlayerName)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [myPlayerName])
 
   // Auto-fill lobby code from ?join=XXXXXX URL param
   useEffect(() => {
