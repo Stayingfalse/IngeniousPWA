@@ -1,6 +1,15 @@
 import type { Color, AxialCoord } from '@ingenious/shared'
 import { hexToPixel } from './hexUtils'
 
+const COLOR_MAP: Record<Color, string> = {
+  red: '#ef4444',
+  orange: '#f97316',
+  yellow: '#eab308',
+  green: '#22c55e',
+  blue: '#3b82f6',
+  purple: '#a855f7',
+}
+
 interface FloatingLabel {
   color: Color
   points: number

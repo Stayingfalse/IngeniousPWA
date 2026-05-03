@@ -87,7 +87,7 @@ export default function HexBoard({
       }
     }
     return map
-  }, [scoringAnimation?.rayHexes])
+  }, [scoringAnimation?.startedAt])
 
   // When a tile is selected, compute every hex that is part of a legal placement
   const validTargetKeys = useMemo(() => {
