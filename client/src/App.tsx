@@ -129,6 +129,13 @@ export default function App() {
     prevConnectedRef.current = connected
   }, [connected, lobbyId, myPlayerName, screen])
 
+  const handleNavigateHome = () => {
+    useGameStore.getState().reset()
+    useLobbyStore.getState().reset()
+    localStorage.removeItem('lastLobbyId')
+    setScreen('home')
+  }
+
   return (
     <div className="min-h-screen bg-[#0f0e17] text-white">
       {!connected && (
@@ -138,7 +145,7 @@ export default function App() {
       )}
       {screen === 'home' && <HomeScreen globalError={errorMessage} />}
       {screen === 'lobby' && <LobbyScreen onNavigate={setScreen} />}
-      {screen === 'game' && <GameScreen />}
+      {screen === 'game' && <GameScreen onNavigateHome={handleNavigateHome} />}
     </div>
   )
 }
