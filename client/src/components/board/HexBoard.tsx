@@ -123,8 +123,7 @@ export default function HexBoard({
   const ghostScore = useMemo(() => {
     if (!isMyTurn || !selectedTile || !ghostHexA || !ghostHexB || !ghostColorA || !ghostColorB) return null
     return scoreMove(ghostHexA, ghostHexB, ghostColorA, ghostColorB, board)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyTurn, selectedTile, ghostHexA?.q, ghostHexA?.r, ghostHexB?.q, ghostHexB?.r, ghostColorA, ghostColorB, board])
+  }, [isMyTurn, selectedTile, ghostHexA, ghostHexB, ghostColorA, ghostColorB, board])
 
   // Build a map from hex key → { color, delayMs } for scoring ray highlights
   const scoringRayMap = useMemo(() => {
@@ -223,6 +222,8 @@ export default function HexBoard({
         const labels: Array<{ color: Color; points: number; hex: AxialCoord }> = []
         if (ghostColorA && ghostColorB) {
           if (ghostColorA === ghostColorB) {
+            // Same-color tile: scoreMove combines both hexes into a single total for that color,
+            // so show one label (matching the actual post-placement floatingLabels behavior).
             if (ghostScore[ghostColorA] > 0) {
               labels.push({ color: ghostColorA, points: ghostScore[ghostColorA], hex: ghostHexA })
             }
