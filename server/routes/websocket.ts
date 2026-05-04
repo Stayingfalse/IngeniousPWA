@@ -62,8 +62,8 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           if (currentLobbyId && currentLobbyId !== newLobbyId) {
             const oldLobby = lobbyManager.getLobby(currentLobbyId)
             if (oldLobby) {
-              if (oldLobby.turnMode === 'async' && oldLobby.status === 'in_progress') {
-                // Silently detach — player stays in the async game
+              if (oldLobby.turnMode === 'async' && (oldLobby.status === 'in_progress' || oldLobby.status === 'waiting')) {
+                // Silently detach — player stays in the async game/lobby
                 oldLobby.detachConnection(pid)
               } else {
                 lobbyManager.playerDisconnected(currentLobbyId, pid)
@@ -122,9 +122,19 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
             }
           }
 
+          // Auto-start when an async lobby with autoStart=true fills up
+          let autoStarted = false
+          if (!vsAiAutoStarted && lobby.autoStart && lobby.status === 'waiting' && lobby.players.length >= lobby.maxPlayers) {
+            // Use force=true since we bypass the normal host-only restriction
+            const startResult = lobbyManager.startGame(currentLobbyId, pid, true)
+            if (!startResult.error) {
+              autoStarted = true
+            }
+          }
+
           // If game is in progress and this is a reconnect (not a fresh vsAI start),
           // send current state so the player can resume
-          if (lobby.gameRoom && lobby.status === 'in_progress' && !vsAiAutoStarted) {
+          if (lobby.gameRoom && lobby.status === 'in_progress' && !vsAiAutoStarted && !autoStarted) {
             lobby.gameRoom.addConnection(pid, socket)
             const masked = lobby.gameRoom.getMaskedState(pid)
             send({ type: 'STATE_UPDATE', state: masked })

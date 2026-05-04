@@ -66,6 +66,14 @@ export type LobbyState = {
   turnMode: TurnMode
   turnLimitSeconds: number | null
   spectators?: SpectatorInfo[]
+  autoStart?: boolean
+}
+
+export type OpenLobbySummary = {
+  lobbyId: string
+  maxPlayers: number
+  players: PlayerInfo[]
+  autoStart: boolean
 }
 
 export type GameResults = {

@@ -18,6 +18,7 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
 
   const isHost = lobbyState?.hostId === myPlayerId
   const canStart = isHost && (lobbyState?.players.length ?? 0) >= 2
+  const isAsyncWaiting = lobbyState?.turnMode === 'async' && lobbyState?.status === 'waiting'
 
   const handleStart = () => {
     wsClient.send({ type: 'START_GAME' })
@@ -121,6 +122,11 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
                   ? `⚡ Real-time · ${lobbyState.turnLimitSeconds >= 60 ? `${lobbyState.turnLimitSeconds / 60} min` : `${lobbyState.turnLimitSeconds} s`} / turn`
                   : '⚡ Real-time'}
             </span>
+            {lobbyState.autoStart && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-900/50 text-green-400">
+                ⚡ Auto-start when full
+              </span>
+            )}
           </div>
         )}
         <div className="flex items-center justify-center gap-2 mt-1">
@@ -221,14 +227,16 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
           )}
           {!isHost && (
             <p className="text-center text-gray-500 text-sm py-3">
-              Waiting for host to start the game…
+              {lobbyState?.autoStart
+                ? 'Game will start automatically when the lobby fills up…'
+                : 'Waiting for host to start the game…'}
             </p>
           )}
           <button
             className="w-full py-2 rounded-lg text-gray-400 hover:text-white transition-colors text-sm"
             onClick={handleLeave}
           >
-            Leave
+            {isAsyncWaiting ? 'Return to Home (lobby stays open)' : 'Leave'}
           </button>
         </div>
       </div>

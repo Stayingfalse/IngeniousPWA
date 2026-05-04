@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LobbyState, PlayerInfo, ActiveGameSummary, SpectatorInfo } from '@ingenious/shared'
+import type { LobbyState, PlayerInfo, ActiveGameSummary, SpectatorInfo, OpenLobbySummary } from '@ingenious/shared'
 
 interface LobbyStore {
   lobbyId: string | null
@@ -8,6 +8,7 @@ interface LobbyStore {
   myPlayerName: string
   mySeat: number | null
   activeGames: ActiveGameSummary[]
+  openLobbies: OpenLobbySummary[]
   isSpectating: boolean
   setMyPlayer: (id: string, name: string) => void
   setLobby: (lobbyId: string, state: LobbyState, seat: number) => void
@@ -16,6 +17,7 @@ interface LobbyStore {
   playerLeft: (playerId: string) => void
   playerNameChanged: (playerId: string, name: string) => void
   setActiveGames: (games: ActiveGameSummary[]) => void
+  setOpenLobbies: (lobbies: OpenLobbySummary[]) => void
   startSpectating: (lobbyState: LobbyState) => void
   spectatorJoined: (spectator: SpectatorInfo) => void
   spectatorLeft: (spectatorId: string) => void
@@ -29,6 +31,7 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
   myPlayerName: '',
   mySeat: null,
   activeGames: [],
+  openLobbies: [],
   isSpectating: false,
 
   setMyPlayer: (id, name) => set({ myPlayerId: id, myPlayerName: name }),
@@ -77,6 +80,8 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
     }),
 
   setActiveGames: (games) => set({ activeGames: games }),
+
+  setOpenLobbies: (lobbies) => set({ openLobbies: lobbies }),
 
   startSpectating: (lobbyState) =>
     set({ lobbyState, lobbyId: lobbyState.id, isSpectating: true, mySeat: null }),

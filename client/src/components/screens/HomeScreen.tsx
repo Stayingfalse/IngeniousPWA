@@ -4,7 +4,7 @@ import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
 import HowToPlayModal from '../ui/HowToPlayModal'
 import StatsPanel from '../ui/StatsPanel'
-import type { TurnMode, AiDifficulty, ActiveGameSummary } from '@ingenious/shared'
+import type { TurnMode, AiDifficulty, ActiveGameSummary, OpenLobbySummary } from '@ingenious/shared'
 
 const TIMER_PRESETS: { label: string; seconds: number }[] = [
   { label: '30 s', seconds: 30 },
@@ -16,12 +16,16 @@ const TIMER_PRESETS: { label: string; seconds: number }[] = [
 export default function HomeScreen({
   globalError,
   activeGames = [],
+  openLobbies = [],
   onEnterGame,
+  onEnterOpenLobby,
   playerId,
 }: {
   globalError?: string
   activeGames?: ActiveGameSummary[]
+  openLobbies?: OpenLobbySummary[]
   onEnterGame?: (lobbyId: string) => void
+  onEnterOpenLobby?: (lobbyId: string) => void
   playerId?: string | null
 }) {
   const { myPlayerName } = useLobbyStore()
@@ -31,6 +35,7 @@ export default function HomeScreen({
   const [mode, setMode] = useState<'join' | 'create'>('join')
   const [turnMode, setTurnMode] = useState<TurnMode>('realtime')
   const [turnLimitSeconds, setTurnLimitSeconds] = useState<number>(60)
+  const [autoStart, setAutoStart] = useState(false)
   const [error, setError] = useState('')
   const [showHowToPlay, setShowHowToPlay] = useState(false)
   const [showDifficultyPicker, setShowDifficultyPicker] = useState(false)
@@ -126,6 +131,7 @@ export default function HomeScreen({
           maxPlayers,
           turnMode,
           turnLimitSeconds: turnMode === 'async' ? null : turnLimitSeconds,
+          autoStart: turnMode === 'async' ? autoStart : false,
         }),
         credentials: 'include',
       })
@@ -152,6 +158,49 @@ export default function HomeScreen({
       <IngeniousBanner />
 
       <StatsPanel playerId={playerId ?? null} />
+
+      {/* Open (waiting) turn-based lobbies — shown above active games */}
+      {openLobbies.length > 0 && (
+        <div className="w-full max-w-sm">
+          <h2 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
+            Open Lobbies
+          </h2>
+          <div className="space-y-2">
+            {openLobbies.map(lobby => (
+              <div
+                key={lobby.lobbyId}
+                className="bg-[#1a1833] rounded-xl px-4 py-3 border border-blue-600/40 flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-mono text-xs text-gray-500">{lobby.lobbyId}</span>
+                    <span className="text-xs bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
+                      ☁ Waiting
+                    </span>
+                    {lobby.autoStart && (
+                      <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded-full font-medium">
+                        ⚡ Auto-start
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-sm text-white truncate">
+                    {lobby.players.map(p => p.name).join(', ')}
+                    <span className="text-gray-500 ml-1">
+                      ({lobby.players.length}/{lobby.maxPlayers})
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onEnterOpenLobby?.(lobby.lobbyId)}
+                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                >
+                  Enter
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Active turn-based games — shown above the join/create form */}
       {activeGames.length > 0 && (
@@ -308,6 +357,18 @@ export default function HomeScreen({
                   ))}
                 </div>
               </div>
+            )}
+
+            {turnMode === 'async' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-purple-500 cursor-pointer"
+                  checked={autoStart}
+                  onChange={e => setAutoStart(e.target.checked)}
+                />
+                <span className="text-sm text-gray-300">Auto-start when lobby is full</span>
+              </label>
             )}
 
             <button

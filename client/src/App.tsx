@@ -5,7 +5,7 @@ import { useGameStore } from './store/gameStore'
 import HomeScreen from './components/screens/HomeScreen'
 import LobbyScreen from './components/screens/LobbyScreen'
 import GameScreen from './components/screens/GameScreen'
-import type { ServerMessage, ActiveGameSummary } from '@ingenious/shared'
+import type { ServerMessage, ActiveGameSummary, OpenLobbySummary } from '@ingenious/shared'
 import { wsClient } from './lib/wsClient'
 
 type Screen = 'home' | 'lobby' | 'game'
@@ -17,7 +17,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating, spectatorJoined, spectatorLeft } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating, spectatorJoined, spectatorLeft, setOpenLobbies, openLobbies } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const fetchActiveGames = useCallback(() => {
@@ -28,6 +28,15 @@ export default function App() {
       })
       .catch((err) => console.warn('[ActiveGames] Failed to fetch active games:', err))
   }, [setActiveGames])
+
+  const fetchOpenLobbies = useCallback(() => {
+    fetch('/api/player/lobbies', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : { lobbies: [] })
+      .then((data: { lobbies?: OpenLobbySummary[] }) => {
+        if (data?.lobbies) setOpenLobbies(data.lobbies)
+      })
+      .catch((err) => console.warn('[OpenLobbies] Failed to fetch open lobbies:', err))
+  }, [setOpenLobbies])
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -153,20 +162,32 @@ export default function App() {
       .finally(() => {
         setAuthReady(true)
         fetchActiveGames()
+        fetchOpenLobbies()
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Refresh active games list periodically while on the home screen so the
-  // "Games in Progress" list updates when it becomes the player's turn.
+  // Refresh active games and open lobbies periodically while on the home screen so the
+  // lists update when it becomes the player's turn or a lobby fills up.
   useEffect(() => {
     if (screen !== 'home') return
-    const id = setInterval(fetchActiveGames, ACTIVE_GAMES_POLL_INTERVAL_MS)
+    const id = setInterval(() => {
+      fetchActiveGames()
+      fetchOpenLobbies()
+    }, ACTIVE_GAMES_POLL_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [screen, fetchActiveGames])
+  }, [screen, fetchActiveGames, fetchOpenLobbies])
 
   /** Enter a specific async game from the home screen game list. */
   const handleEnterGame = useCallback((targetLobbyId: string) => {
+    useGameStore.getState().reset()
+    const savedName = localStorage.getItem('playerName')
+    const name = myPlayerName || savedName || 'Player'
+    wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
+  }, [myPlayerName])
+
+  /** Enter an open (waiting) async lobby from the home screen. */
+  const handleEnterOpenLobby = useCallback((targetLobbyId: string) => {
     useGameStore.getState().reset()
     const savedName = localStorage.getItem('playerName')
     const name = myPlayerName || savedName || 'Player'
@@ -218,11 +239,17 @@ export default function App() {
   const handleNavigateHome = () => {
     const { lobbyState: currentLobbyState, isSpectating } = useLobbyStore.getState()
     const currentTurnMode = currentLobbyState?.turnMode
+    const currentStatus = currentLobbyState?.status
     useGameStore.getState().reset()
     if (!isSpectating && currentTurnMode === 'async') {
-      // For async games, keep the lobby state (player is still in the game).
-      // Just go back to home and refresh the active games list.
+      // For async games/lobbies, keep the lobby state (player is still a member).
+      // Refresh both lists so the home screen shows up-to-date info.
       fetchActiveGames()
+      fetchOpenLobbies()
+    } else if (!isSpectating && currentStatus === 'waiting' && currentTurnMode !== 'async') {
+      // Leaving a realtime waiting lobby returns home and fully resets
+      useLobbyStore.getState().reset()
+      localStorage.removeItem('lastLobbyId')
     } else {
       // For realtime games and spectators, fully reset and clear the saved lobby.
       useLobbyStore.getState().reset()
@@ -242,7 +269,9 @@ export default function App() {
         <HomeScreen
           globalError={errorMessage}
           activeGames={activeGames}
+          openLobbies={openLobbies}
           onEnterGame={handleEnterGame}
+          onEnterOpenLobby={handleEnterOpenLobby}
           playerId={myPlayerId}
         />
       )}
