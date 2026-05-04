@@ -57,7 +57,29 @@ db.exec(`
     auth TEXT NOT NULL,
     updated_at INTEGER DEFAULT (unixepoch())
   );
+
+  CREATE TABLE IF NOT EXISTS game_snapshots (
+    lobby_id TEXT PRIMARY KEY,
+    state_json TEXT NOT NULL,
+    player_names_json TEXT NOT NULL,
+    snapshot_at INTEGER DEFAULT (unixepoch())
+  );
 `)
+
+// ── Schema migrations ────────────────────────────────────────────────────────
+// Add columns that may not exist in older databases (SQLite has no IF NOT EXISTS
+// for ALTER TABLE, so we catch the error if the column already exists)
+const migrations = [
+  "ALTER TABLE lobbies ADD COLUMN turn_mode TEXT DEFAULT 'realtime'",
+  'ALTER TABLE lobbies ADD COLUMN turn_limit_seconds INTEGER',
+]
+for (const sql of migrations) {
+  try {
+    db.exec(sql)
+  } catch {
+    // Column already exists — ignore
+  }
+}
 
 // ── VAPID keys ──────────────────────────────────────────────────────────────
 // Loaded lazily so the rest of the app works even if web-push is not yet
@@ -119,6 +141,8 @@ export interface LobbyRow {
   created_at: number
   started_at: number | null
   finished_at: number | null
+  turn_mode: string | null
+  turn_limit_seconds: number | null
 }
 
 export interface LobbyPlayerRow {
@@ -146,7 +170,7 @@ export const playerQueries = {
 
 export const lobbyQueries = {
   findById: db.prepare<[string], LobbyRow>('SELECT * FROM lobbies WHERE id = ?'),
-  insert: db.prepare('INSERT INTO lobbies (id, status, player_count, host_id) VALUES (?, ?, ?, ?)'),
+  insert: db.prepare('INSERT INTO lobbies (id, status, player_count, host_id, turn_mode, turn_limit_seconds) VALUES (?, ?, ?, ?, ?, ?)'),
   updateStatus: db.prepare('UPDATE lobbies SET status = ? WHERE id = ?'),
   setStarted: db.prepare('UPDATE lobbies SET status = ?, started_at = unixepoch() WHERE id = ?'),
   setFinished: db.prepare('UPDATE lobbies SET status = ?, finished_at = unixepoch() WHERE id = ?'),
@@ -193,6 +217,39 @@ export const pushSubscriptionQueries = {
     'SELECT * FROM push_subscriptions WHERE player_id = ?',
   ),
   delete: db.prepare('DELETE FROM push_subscriptions WHERE player_id = ?'),
+}
+
+export interface SnapshotRow {
+  lobby_id: string
+  state_json: string
+  player_names_json: string
+  snapshot_at: number
+}
+
+export const snapshotQueries = {
+  upsert: db.prepare(
+    `INSERT INTO game_snapshots (lobby_id, state_json, player_names_json, snapshot_at)
+     VALUES (?, ?, ?, unixepoch())
+     ON CONFLICT(lobby_id) DO UPDATE SET state_json=excluded.state_json, player_names_json=excluded.player_names_json, snapshot_at=unixepoch()`,
+  ),
+  findAll: db.prepare<[], SnapshotRow>('SELECT * FROM game_snapshots'),
+  delete: db.prepare('DELETE FROM game_snapshots WHERE lobby_id = ?'),
+}
+
+export interface ActiveGameRow {
+  lobby_id: string
+  status: string
+  turn_mode: string
+  turn_limit_seconds: number | null
+}
+
+export const playerGameQueries = {
+  findActiveForPlayer: db.prepare<[string], ActiveGameRow>(
+    `SELECT lp.lobby_id, l.status, COALESCE(l.turn_mode, 'realtime') as turn_mode, l.turn_limit_seconds
+     FROM lobby_players lp
+     JOIN lobbies l ON l.id = lp.lobby_id
+     WHERE lp.player_id = ? AND l.status = 'in_progress'`,
+  ),
 }
 
 export default db

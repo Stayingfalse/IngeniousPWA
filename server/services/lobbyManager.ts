@@ -1,7 +1,8 @@
 import { WebSocket } from '@fastify/websocket'
-import type { PlayerInfo, LobbyState, ServerMessage, TurnMode } from '@ingenious/shared'
+import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, GameState } from '@ingenious/shared'
 import { GameRoom } from './gameRoom'
-import { lobbyQueries, lobbyPlayerQueries } from './database'
+import type { GameRoomSnapshot } from './gameRoom'
+import { lobbyQueries, lobbyPlayerQueries, snapshotQueries, playerQueries } from './database'
 import { v4 as uuidv4 } from 'uuid'
 
 export interface LobbyPlayer {
@@ -55,14 +56,29 @@ export class Lobby {
       }
     }
   }
+
+  /**
+   * Silently remove a player's WebSocket connection without broadcasting
+   * PLAYER_LEFT. Used when switching between async games so the player
+   * remains a participant in this game.
+   */
+  detachConnection(playerId: string): void {
+    this.connections.delete(playerId)
+    if (this.gameRoom) {
+      this.gameRoom.removeConnection(playerId)
+    }
+  }
 }
 
 export class LobbyManager {
   private lobbies: Map<string, Lobby> = new Map()
 
   constructor() {
+    this.restoreFromDatabase()
     // Periodically clean up stale lobbies to prevent memory leaks
     setInterval(() => this.cleanupLobbies(), 10 * 60 * 1000)
+    // Periodically snapshot all in-progress games (safety net)
+    setInterval(() => this.snapshotAllGames(), 60 * 1000)
   }
 
   createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null): Lobby {
@@ -71,7 +87,7 @@ export class LobbyManager {
     this.lobbies.set(id, lobby)
 
     try {
-      lobbyQueries.insert.run(id, 'waiting', maxPlayers, null)
+      lobbyQueries.insert.run(id, 'waiting', maxPlayers, null, turnMode, turnLimitSeconds)
     } catch {
       // Non-critical
     }
@@ -144,6 +160,7 @@ export class LobbyManager {
 
     const turnLimitMs = lobby.turnLimitSeconds !== null ? lobby.turnLimitSeconds * 1000 : null
     const gameRoom = new GameRoom(lobbyId, playerIds, playerNames, turnLimitMs)
+    gameRoom.onAfterMove = () => this.saveSnapshot(lobbyId)
 
     lobby.gameRoom = gameRoom
     lobby.status = 'in_progress'
@@ -180,7 +197,128 @@ export class LobbyManager {
       lobby.gameRoom.removeConnection(playerId)
     }
 
-    lobby.broadcast({ type: 'PLAYER_LEFT', playerId })
+    // Don't broadcast PLAYER_LEFT for async in-progress games — players
+    // being offline is expected and the game continues when they return.
+    if (!(lobby.turnMode === 'async' && lobby.status === 'in_progress')) {
+      lobby.broadcast({ type: 'PLAYER_LEFT', playerId })
+    }
+  }
+
+  /**
+   * Persist a snapshot of the given lobby's game state to the database so the
+   * game can be restored after a server restart.
+   */
+  saveSnapshot(lobbyId: string): void {
+    const lobby = this.getLobby(lobbyId)
+    if (!lobby?.gameRoom || lobby.status !== 'in_progress') return
+
+    try {
+      const snapshot = lobby.gameRoom.getSnapshotData()
+      snapshotQueries.upsert.run(
+        lobbyId,
+        JSON.stringify(snapshot.state),
+        JSON.stringify({
+          playerNames: snapshot.playerNames,
+          turnLimitMs: snapshot.turnLimitMs,
+          pendingSwapPlayerId: snapshot.pendingSwapPlayerId,
+        }),
+      )
+    } catch (err) {
+      console.error(`[LobbyManager] Failed to save snapshot for ${lobbyId}:`, err)
+    }
+  }
+
+  /**
+   * Flush snapshots for all in-progress games. Called before process exit to
+   * minimise the number of moves lost on restart.
+   */
+  flushAllSnapshots(): void {
+    for (const [id, lobby] of this.lobbies) {
+      if (lobby.status === 'in_progress' && lobby.gameRoom) {
+        this.saveSnapshot(id)
+      }
+    }
+  }
+
+  private snapshotAllGames(): void {
+    for (const [id, lobby] of this.lobbies) {
+      if (lobby.status === 'in_progress' && lobby.gameRoom) {
+        this.saveSnapshot(id)
+      }
+    }
+  }
+
+  /**
+   * Restore in-progress async and realtime games from the database on startup.
+   * Each snapshot is reconstructed into a Lobby + GameRoom without any active
+   * WebSocket connections (players will reconnect on their next visit).
+   */
+  private restoreFromDatabase(): void {
+    try {
+      const snapshots = snapshotQueries.findAll.all()
+      let restored = 0
+
+      for (const snap of snapshots) {
+        try {
+          const state = JSON.parse(snap.state_json) as GameState
+          const meta = JSON.parse(snap.player_names_json) as {
+            playerNames: Record<string, string>
+            turnLimitMs: number | null
+            pendingSwapPlayerId: string | null
+          }
+
+          const lobbyRow = lobbyQueries.findById.get(snap.lobby_id)
+          if (!lobbyRow) continue
+
+          const dbPlayers = lobbyPlayerQueries.findByLobby.all(snap.lobby_id)
+          if (dbPlayers.length === 0) continue
+
+          // Build player list — prefer DB display names as the source of truth
+          const playerNames: Record<string, string> = { ...meta.playerNames }
+          const players: LobbyPlayer[] = []
+
+          for (const lp of dbPlayers) {
+            const playerRow = playerQueries.findById.get(lp.player_id)
+            const name =
+              playerRow?.display_name ||
+              meta.playerNames[lp.player_id] ||
+              `Player_${lp.player_id.slice(0, 6)}`
+            playerNames[lp.player_id] = name
+            players.push({ id: lp.player_id, seat: lp.seat_index, name })
+          }
+
+          const turnMode = ((lobbyRow.turn_mode as TurnMode | null) || 'realtime') as TurnMode
+          const turnLimitSeconds = lobbyRow.turn_limit_seconds ?? null
+
+          const lobby = new Lobby(snap.lobby_id, lobbyRow.player_count, turnMode, turnLimitSeconds)
+          lobby.players = players
+          lobby.status = 'in_progress'
+          lobby.hostId = players[0]?.id ?? null
+          // Preserve original creation time (DB stores unix seconds)
+          lobby.createdAt = (lobbyRow.created_at || Math.floor(Date.now() / 1000)) * 1000
+
+          const gameRoom = GameRoom.fromSnapshot(snap.lobby_id, {
+            state,
+            playerNames,
+            turnLimitMs: meta.turnLimitMs,
+            pendingSwapPlayerId: meta.pendingSwapPlayerId,
+          })
+          gameRoom.onAfterMove = () => this.saveSnapshot(snap.lobby_id)
+
+          lobby.gameRoom = gameRoom
+          this.lobbies.set(snap.lobby_id, lobby)
+          restored++
+        } catch (err) {
+          console.error(`[LobbyManager] Failed to restore snapshot for ${snap.lobby_id}:`, err)
+        }
+      }
+
+      if (restored > 0) {
+        console.log(`[LobbyManager] Restored ${restored} in-progress game(s) from database`)
+      }
+    } catch (err) {
+      console.error('[LobbyManager] Failed to restore from database:', err)
+    }
   }
 
   private generateLobbyCode(): string {

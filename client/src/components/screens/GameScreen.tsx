@@ -155,7 +155,18 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
     <div className="flex flex-col h-dvh overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#1a1833] border-b border-[#312e6b]">
-        <IngeniousBanner small />
+        <div className="flex items-center gap-2">
+          {isAsyncMode && (
+            <button
+              onClick={onNavigateHome}
+              className="text-gray-400 hover:text-white transition-colors text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-white/10"
+              title="Return to games list"
+            >
+              ← All Games
+            </button>
+          )}
+          <IngeniousBanner small />
+        </div>
         <TurnIndicator
           currentPlayerId={gameState?.currentPlayerId ?? ''}
           myPlayerId={myPlayerId ?? ''}

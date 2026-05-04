@@ -62,6 +62,14 @@ export type GameResults = {
   reason: 'all_eighteen' | 'no_moves'
 }
 
+export type ActiveGameSummary = {
+  lobbyId: string
+  turnMode: TurnMode
+  currentPlayerId: string
+  yourTurn: boolean
+  players: PlayerInfo[]
+}
+
 export type ClientMessage =
   | { type: 'JOIN_LOBBY'; lobbyId: string; playerName: string }
   | { type: 'START_GAME' }

@@ -3,7 +3,7 @@ import { wsClient } from '../../lib/wsClient'
 import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
 import HowToPlayModal from '../ui/HowToPlayModal'
-import type { TurnMode } from '@ingenious/shared'
+import type { TurnMode, ActiveGameSummary } from '@ingenious/shared'
 
 const TIMER_PRESETS: { label: string; seconds: number }[] = [
   { label: '30 s', seconds: 30 },
@@ -12,7 +12,15 @@ const TIMER_PRESETS: { label: string; seconds: number }[] = [
   { label: '5 min', seconds: 300 },
 ]
 
-export default function HomeScreen({ globalError }: { globalError?: string }) {
+export default function HomeScreen({
+  globalError,
+  activeGames = [],
+  onEnterGame,
+}: {
+  globalError?: string
+  activeGames?: ActiveGameSummary[]
+  onEnterGame?: (lobbyId: string) => void
+}) {
   const { myPlayerName } = useLobbyStore()
   const [playerName, setPlayerName] = useState('')
   const [lobbyCode, setLobbyCode] = useState('')
@@ -111,6 +119,52 @@ export default function HomeScreen({ globalError }: { globalError?: string }) {
       {showHowToPlay && <HowToPlayModal onClose={() => setShowHowToPlay(false)} />}
 
       <IngeniousBanner />
+
+      {/* Active turn-based games — shown above the join/create form */}
+      {activeGames.length > 0 && (
+        <div className="w-full max-w-sm">
+          <h2 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
+            Your Turn-Based Games
+          </h2>
+          <div className="space-y-2">
+            {activeGames.map(game => {
+              const currentPlayerName = game.players.find(p => p.id === game.currentPlayerId)?.name ?? 'Opponent'
+              return (
+                <div
+                  key={game.lobbyId}
+                  className={`bg-[#1a1833] rounded-xl px-4 py-3 border flex items-center gap-3 ${
+                    game.yourTurn ? 'border-green-500/50' : 'border-[#312e6b]'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-xs text-gray-500">{game.lobbyId}</span>
+                      {game.yourTurn ? (
+                        <span className="text-xs bg-green-900/60 text-green-300 px-1.5 py-0.5 rounded-full font-medium">
+                          🟢 Your Turn
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500">
+                          ⏳ {currentPlayerName}&apos;s turn
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-white truncate">
+                      {game.players.map(p => p.name).join(' vs ')}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onEnterGame?.(game.lobbyId)}
+                    className="shrink-0 bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Enter
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm shadow-xl border border-[#312e6b]">
         <div className="mb-4">

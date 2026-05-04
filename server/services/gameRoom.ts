@@ -24,7 +24,7 @@ import {
   emptyScores,
   minScore,
 } from '@ingenious/shared'
-import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys } from './database'
+import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys, snapshotQueries } from './database'
 import { v4 as uuidv4 } from 'uuid'
 
 // Lazy-load web-push to avoid crashing if not installed
@@ -52,6 +52,13 @@ function sendPushNotification(
   }
 }
 
+export interface GameRoomSnapshot {
+  state: GameState
+  playerNames: Record<string, string>
+  turnLimitMs: number | null
+  pendingSwapPlayerId: string | null
+}
+
 export class GameRoom {
   private state: GameState
   private connections: Map<string, WebSocket> = new Map()
@@ -66,6 +73,8 @@ export class GameRoom {
   private pendingLastMove: LastMove | undefined = undefined
   // Pending swap: set after placement when rack lacks lowest-color tile
   private pendingSwapPlayerId: string | null = null
+  // Optional callback invoked after each state-changing move (used for snapshots)
+  onAfterMove: (() => void) | null = null
 
   constructor(
     lobbyId: string,
@@ -91,6 +100,39 @@ export class GameRoom {
 
     this.state = initGameState(lobbyId, playerIds, initialRacks, remaining)
     this.startTurnTimer()
+  }
+
+  /**
+   * Reconstruct a GameRoom from a persisted snapshot without re-initialising
+   * the game state (no new tiles drawn, no new player order).
+   */
+  static fromSnapshot(lobbyId: string, data: GameRoomSnapshot): GameRoom {
+    const room = Object.create(GameRoom.prototype) as GameRoom
+    room.lobbyId = lobbyId
+    room.turnLimitMs = data.turnLimitMs
+    room.state = data.state
+    room.connections = new Map()
+    room.startedAt = Date.now()
+    room.playerNames = new Map(Object.entries(data.playerNames))
+    room.pendingLastMove = undefined
+    room.pendingSwapPlayerId = data.pendingSwapPlayerId
+    room.turnTimer = null
+    room.turnDeadline = null
+    room.onAfterMove = null
+    if (data.state.status === 'in_progress') {
+      room.startTurnTimer()
+    }
+    return room
+  }
+
+  /** Return a serialisable snapshot of the current game room state. */
+  getSnapshotData(): GameRoomSnapshot {
+    return {
+      state: this.state,
+      playerNames: Object.fromEntries(this.playerNames),
+      turnLimitMs: this.turnLimitMs,
+      pendingSwapPlayerId: this.pendingSwapPlayerId,
+    }
   }
 
   addConnection(playerId: string, ws: WebSocket): void {
@@ -236,6 +278,9 @@ export class GameRoom {
       this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
   }
 
   handleDeclineSwap(playerId: string): void {
@@ -256,6 +301,9 @@ export class GameRoom {
       this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
   }
 
   private refillAndBroadcast(playerId: string, advanceTurn: boolean): void {
@@ -286,6 +334,9 @@ export class GameRoom {
         // Swap available — hold the turn, let the player decide
         this.pendingSwapPlayerId = playerId
         this.broadcastState()
+        if (this.state.status === 'in_progress') {
+          this.onAfterMove?.()
+        }
         return
       }
 
@@ -299,6 +350,9 @@ export class GameRoom {
       this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
   }
 
   private advanceTurn(playerId: string): void {
@@ -396,7 +450,7 @@ export class GameRoom {
 
     this.broadcast({ type: 'GAME_OVER', results })
 
-    // Persist to DB
+    // Persist to DB and clean up snapshot
     try {
       const duration = Math.floor((Date.now() - this.startedAt) / 1000)
       gameResultQueries.insert.run(
@@ -408,6 +462,7 @@ export class GameRoom {
         duration,
       )
       lobbyQueries.setFinished.run('finished', this.lobbyId)
+      snapshotQueries.delete.run(this.lobbyId)
     } catch {
       // Non-critical DB write
     }

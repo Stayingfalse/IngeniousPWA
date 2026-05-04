@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
-import type { TurnMode } from '@ingenious/shared'
+import type { TurnMode, ActiveGameSummary } from '@ingenious/shared'
 import db from '../services/database'
 
 // Valid real-time turn timer presets (seconds). null = async/turn-based.
@@ -153,6 +153,37 @@ export default async function apiRoutes(fastify: FastifyInstance) {
 
     pushSubscriptionQueries.delete.run(player.id)
     return reply.send({ ok: true })
+  })
+
+  // List active in-progress games the player is part of (30 per minute per IP)
+  fastify.get('/api/player/games', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const playerId = player.id
+    const rows = playerGameQueries.findActiveForPlayer.all(playerId)
+
+    const games: ActiveGameSummary[] = []
+    for (const row of rows) {
+      const lobby = lobbyManager.getLobby(row.lobby_id)
+      if (!lobby?.gameRoom) continue
+
+      const gameState = lobby.gameRoom.getState()
+      games.push({
+        lobbyId: row.lobby_id,
+        turnMode: (row.turn_mode as TurnMode) || 'realtime',
+        currentPlayerId: gameState.currentPlayerId,
+        yourTurn: gameState.currentPlayerId === playerId,
+        players: lobby.players.map(p => ({ id: p.id, name: p.name, seat: p.seat })),
+      })
+    }
+
+    return reply.send({ games })
   })
 
   // Health check

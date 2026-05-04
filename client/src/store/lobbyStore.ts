@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LobbyState, PlayerInfo } from '@ingenious/shared'
+import type { LobbyState, PlayerInfo, ActiveGameSummary } from '@ingenious/shared'
 
 interface LobbyStore {
   lobbyId: string | null
@@ -7,12 +7,14 @@ interface LobbyStore {
   myPlayerId: string | null
   myPlayerName: string
   mySeat: number | null
+  activeGames: ActiveGameSummary[]
   setMyPlayer: (id: string, name: string) => void
   setLobby: (lobbyId: string, state: LobbyState, seat: number) => void
   updateLobbyState: (state: LobbyState) => void
   playerJoined: (player: PlayerInfo) => void
   playerLeft: (playerId: string) => void
   playerNameChanged: (playerId: string, name: string) => void
+  setActiveGames: (games: ActiveGameSummary[]) => void
   reset: () => void
 }
 
@@ -22,6 +24,7 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
   myPlayerId: null,
   myPlayerName: '',
   mySeat: null,
+  activeGames: [],
 
   setMyPlayer: (id, name) => set({ myPlayerId: id, myPlayerName: name }),
 
@@ -67,6 +70,8 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
         },
       }
     }),
+
+  setActiveGames: (games) => set({ activeGames: games }),
 
   reset: () => set({ lobbyId: null, lobbyState: null, mySeat: null }),
 }))

@@ -55,7 +55,22 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
             playerId = pid
           }
 
-          currentLobbyId = lobbyId.toUpperCase()
+          const newLobbyId = lobbyId.toUpperCase()
+
+          // If switching to a different lobby, detach from the current one first
+          if (currentLobbyId && currentLobbyId !== newLobbyId) {
+            const oldLobby = lobbyManager.getLobby(currentLobbyId)
+            if (oldLobby) {
+              if (oldLobby.turnMode === 'async' && oldLobby.status === 'in_progress') {
+                // Silently detach — player stays in the async game
+                oldLobby.detachConnection(pid)
+              } else {
+                lobbyManager.playerDisconnected(currentLobbyId, pid)
+              }
+            }
+          }
+
+          currentLobbyId = newLobbyId
           const result = lobbyManager.joinLobby(currentLobbyId, pid, playerName, socket)
 
           if ('error' in result) {
