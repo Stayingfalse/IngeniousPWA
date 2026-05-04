@@ -8,6 +8,7 @@ interface LobbyStore {
   myPlayerName: string
   mySeat: number | null
   activeGames: ActiveGameSummary[]
+  isSpectating: boolean
   setMyPlayer: (id: string, name: string) => void
   setLobby: (lobbyId: string, state: LobbyState, seat: number) => void
   updateLobbyState: (state: LobbyState) => void
@@ -15,6 +16,7 @@ interface LobbyStore {
   playerLeft: (playerId: string) => void
   playerNameChanged: (playerId: string, name: string) => void
   setActiveGames: (games: ActiveGameSummary[]) => void
+  startSpectating: (lobbyState: LobbyState) => void
   reset: () => void
 }
 
@@ -25,11 +27,12 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
   myPlayerName: '',
   mySeat: null,
   activeGames: [],
+  isSpectating: false,
 
   setMyPlayer: (id, name) => set({ myPlayerId: id, myPlayerName: name }),
 
   setLobby: (lobbyId, state, seat) =>
-    set({ lobbyId, lobbyState: state, mySeat: seat }),
+    set({ lobbyId, lobbyState: state, mySeat: seat, isSpectating: false }),
 
   updateLobbyState: (state) => set({ lobbyState: state }),
 
@@ -73,5 +76,8 @@ export const useLobbyStore = create<LobbyStore>((set) => ({
 
   setActiveGames: (games) => set({ activeGames: games }),
 
-  reset: () => set({ lobbyId: null, lobbyState: null, mySeat: null }),
+  startSpectating: (lobbyState) =>
+    set({ lobbyState, lobbyId: lobbyState.id, isSpectating: true, mySeat: null }),
+
+  reset: () => set({ lobbyId: null, lobbyState: null, mySeat: null, isSpectating: false }),
 }))

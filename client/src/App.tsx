@@ -17,7 +17,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const fetchActiveGames = useCallback(() => {
@@ -47,6 +47,15 @@ export default function App() {
         setErrorMessage('')
         // If a game is already in progress (mid-game reconnect), go straight to the game screen
         setScreen(msg.lobbyState.status === 'in_progress' ? 'game' : 'lobby')
+        break
+      }
+
+      case 'SPECTATING': {
+        // Non-participant viewing an in-progress game
+        startSpectating(msg.lobbyState)
+        setGameState(msg.state)
+        setErrorMessage('')
+        setScreen('game')
         break
       }
 
@@ -99,7 +108,7 @@ export default function App() {
           setErrorMessage('Lobby not found. It may have been closed.')
           localStorage.removeItem('lastLobbyId')
         } else if (msg.code === 'GAME_ALREADY_STARTED') {
-          setErrorMessage('This game has already started and you are not a player. Spectating is not yet available.')
+          setErrorMessage('This game has already finished and cannot be joined.')
         } else {
           setErrorMessage(msg.message || 'An error occurred')
         }
@@ -199,14 +208,15 @@ export default function App() {
   }, [connected, lobbyId, myPlayerName, screen])
 
   const handleNavigateHome = () => {
-    const currentTurnMode = useLobbyStore.getState().lobbyState?.turnMode
+    const { lobbyState: currentLobbyState, isSpectating } = useLobbyStore.getState()
+    const currentTurnMode = currentLobbyState?.turnMode
     useGameStore.getState().reset()
-    if (currentTurnMode === 'async') {
+    if (!isSpectating && currentTurnMode === 'async') {
       // For async games, keep the lobby state (player is still in the game).
       // Just go back to home and refresh the active games list.
       fetchActiveGames()
     } else {
-      // For realtime games, fully reset and clear the saved lobby.
+      // For realtime games and spectators, fully reset and clear the saved lobby.
       useLobbyStore.getState().reset()
       localStorage.removeItem('lastLobbyId')
     }

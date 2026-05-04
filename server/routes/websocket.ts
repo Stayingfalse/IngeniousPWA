@@ -9,6 +9,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
   fastify.get('/ws', { websocket: true }, (socket: WebSocket, request) => {
     let playerId: string | null = null
     let currentLobbyId: string | null = null
+    let isSpectatorConnection = false
 
     const send = (msg: object) => {
       if (socket.readyState === 1) {
@@ -78,7 +79,22 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
             return
           }
 
-          const { lobby, seat } = result
+          const { lobby } = result
+
+          // Spectator path: non-participant watching an in-progress game
+          if ('isSpectator' in result && result.isSpectator) {
+            isSpectatorConnection = true
+            lobby.gameRoom!.addSpectatorConnection(pid, socket)
+            send({
+              type: 'SPECTATING',
+              state: lobby.gameRoom!.getSpectatorState(),
+              lobbyState: lobby.getLobbyState(),
+            })
+            break
+          }
+
+          isSpectatorConnection = false
+          const { seat } = result as { lobby: typeof lobby; seat: number }
 
           send({
             type: 'JOINED',
@@ -111,7 +127,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
         }
 
         case 'START_GAME': {
-          if (!playerId || !currentLobbyId) {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
             return
           }
@@ -124,7 +140,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
         }
 
         case 'PLACE_TILE': {
-          if (!playerId || !currentLobbyId) {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
             return
           }
@@ -140,7 +156,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
         }
 
         case 'SWAP_RACK': {
-          if (!playerId || !currentLobbyId) {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
             return
           }
@@ -156,7 +172,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
         }
 
         case 'DECLINE_SWAP': {
-          if (!playerId || !currentLobbyId) {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
             return
           }
@@ -172,7 +188,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
         }
 
         case 'FORFEIT_GAME': {
-          if (!playerId || !currentLobbyId) {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
             return
           }
@@ -188,7 +204,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
         }
 
         case 'CHANGE_NAME': {
-          if (!playerId || !currentLobbyId) {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
             return
           }
@@ -222,8 +238,12 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
           const lobby = lobbyManager.getLobby(currentLobbyId)
           if (lobby?.gameRoom) {
-            const masked = lobby.gameRoom.getMaskedState(playerId)
-            send({ type: 'STATE_UPDATE', state: masked })
+            if (isSpectatorConnection) {
+              send({ type: 'STATE_UPDATE', state: lobby.gameRoom.getSpectatorState() })
+            } else {
+              const masked = lobby.gameRoom.getMaskedState(playerId)
+              send({ type: 'STATE_UPDATE', state: masked })
+            }
           }
           break
         }
@@ -232,13 +252,24 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
     socket.on('close', () => {
       if (playerId && currentLobbyId) {
-        lobbyManager.playerDisconnected(currentLobbyId, playerId)
+        if (isSpectatorConnection) {
+          // Spectators are not tracked as lobby players — just remove their game connection
+          const lobby = lobbyManager.getLobby(currentLobbyId)
+          lobby?.gameRoom?.removeSpectatorConnection(playerId)
+        } else {
+          lobbyManager.playerDisconnected(currentLobbyId, playerId)
+        }
       }
     })
 
     socket.on('error', () => {
       if (playerId && currentLobbyId) {
-        lobbyManager.playerDisconnected(currentLobbyId, playerId)
+        if (isSpectatorConnection) {
+          const lobby = lobbyManager.getLobby(currentLobbyId)
+          lobby?.gameRoom?.removeSpectatorConnection(playerId)
+        } else {
+          lobbyManager.playerDisconnected(currentLobbyId, playerId)
+        }
       }
     })
   })

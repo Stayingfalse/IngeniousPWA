@@ -64,6 +64,7 @@ export interface GameRoomSnapshot {
 export class GameRoom {
   private state: GameState
   private connections: Map<string, WebSocket> = new Map()
+  private spectatorConnections: Map<string, WebSocket> = new Map()
   private startedAt: number = Date.now()
   private lobbyId: string
   private turnLimitMs: number | null
@@ -122,6 +123,7 @@ export class GameRoom {
     room.turnLimitMs = data.turnLimitMs
     room.state = { ...data.state, forfeitedPlayerIds: data.state.forfeitedPlayerIds ?? [] }
     room.connections = new Map()
+    room.spectatorConnections = new Map()
     room.startedAt = Date.now()
     room.playerNames = new Map(Object.entries(data.playerNames))
     room.pendingLastMove = undefined
@@ -154,6 +156,22 @@ export class GameRoom {
     this.connections.delete(playerId)
   }
 
+  addSpectatorConnection(spectatorId: string, ws: WebSocket): void {
+    this.spectatorConnections.set(spectatorId, ws)
+  }
+
+  removeSpectatorConnection(spectatorId: string): void {
+    this.spectatorConnections.delete(spectatorId)
+  }
+
+  /** Return a masked state suitable for a spectator (empty rack, isSpectator flag set). */
+  getSpectatorState(): MaskedGameState {
+    return {
+      ...maskGameState(this.state, '', this.turnDeadline, undefined, false),
+      isSpectator: true,
+    }
+  }
+
   send(playerId: string, msg: ServerMessage): void {
     const ws = this.connections.get(playerId)
     if (ws && ws.readyState === 1) {
@@ -167,6 +185,12 @@ export class GameRoom {
         ws.send(JSON.stringify(msg))
       }
     }
+    // Spectators receive all game-level broadcasts (GAME_OVER, INGENIOUS, etc.)
+    for (const [, ws] of this.spectatorConnections) {
+      if (ws.readyState === 1) {
+        ws.send(JSON.stringify(msg))
+      }
+    }
   }
 
   broadcastState(): void {
@@ -176,6 +200,19 @@ export class GameRoom {
       const swapAvailable = this.pendingSwapPlayerId === playerId
       const masked = maskGameState(this.state, playerId, this.turnDeadline, lastMove, swapAvailable)
       this.send(playerId, { type: 'STATE_UPDATE', state: masked })
+    }
+    // Send spectator-safe state (empty rack, isSpectator flag) to any watching connections
+    if (this.spectatorConnections.size > 0) {
+      const spectatorState: MaskedGameState = {
+        ...maskGameState(this.state, '', this.turnDeadline, lastMove, false),
+        isSpectator: true,
+      }
+      const payload = JSON.stringify({ type: 'STATE_UPDATE', state: spectatorState })
+      for (const [, ws] of this.spectatorConnections) {
+        if (ws.readyState === 1) {
+          ws.send(payload)
+        }
+      }
     }
     this.maybeScheduleAiMove()
   }
