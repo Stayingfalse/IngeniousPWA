@@ -324,20 +324,4 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     })
     return reply.send({ results })
   })
-
-  // ── Tournament endpoints ──────────────────────────────────────────────────
-
-  fastify.get('/api/tournaments/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const token = (request.cookies as Record<string, string | undefined>)['player_token']
-    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
-    const player = playerQueries.findByToken.get(token)
-    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
-
-    const { tournamentManager } = await import('../services/tournamentManager')
-    const t = tournamentManager.getTournament(id.toUpperCase())
-    if (!t) return reply.status(404).send({ error: 'Tournament not found' })
-
-    return reply.send({ tournament: t.state })
-  })
 }

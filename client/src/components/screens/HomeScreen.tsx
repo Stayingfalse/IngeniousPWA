@@ -41,11 +41,6 @@ export default function HomeScreen({
   const [error, setError] = useState('')
   const [showHowToPlay, setShowHowToPlay] = useState(false)
   const [showDifficultyPicker, setShowDifficultyPicker] = useState(false)
-  const [showTournament, setShowTournament] = useState(false)
-  const [tournamentFormat, setTournamentFormat] = useState<'round_robin' | 'swiss'>('round_robin')
-  const [tournamentMaxPlayers, setTournamentMaxPlayers] = useState(4)
-  const [tournamentCode, setTournamentCode] = useState('')
-  const [tournamentMode, setTournamentMode] = useState<'join' | 'create'>('join')
 
   // Display global error if provided
   useEffect(() => {
@@ -124,7 +119,8 @@ export default function HomeScreen({
     })
   }
 
-  const handleCreate = async () => {    const name = playerName.trim() || myPlayerName || 'Player'
+  const handleCreate = async () => {
+    const name = playerName.trim() || myPlayerName || 'Player'
     setError('')
     // Save name to localStorage
     localStorage.setItem('playerName', name)
@@ -155,35 +151,6 @@ export default function HomeScreen({
     } catch {
       setError('Network error')
     }
-  }
-
-  const handleCreateTournament = () => {
-    const name = playerName.trim() || myPlayerName || 'Player'
-    setError('')
-    localStorage.setItem('playerName', name)
-    wsClient.send({
-      type: 'CREATE_TOURNAMENT',
-      format: tournamentFormat,
-      maxPlayers: tournamentMaxPlayers,
-      turnMode,
-      turnLimitSeconds: turnMode === 'realtime' ? turnLimitSeconds : null,
-    })
-  }
-
-  const handleJoinTournament = () => {
-    const name = playerName.trim() || myPlayerName || 'Player'
-    const code = tournamentCode.trim().toUpperCase()
-    setError('')
-    if (!code || code.length !== 6) {
-      setError('Enter a valid 6-character tournament code')
-      return
-    }
-    localStorage.setItem('playerName', name)
-    wsClient.send({
-      type: 'JOIN_TOURNAMENT',
-      tournamentId: code,
-      playerName: name,
-    })
   }
 
   return (
@@ -467,99 +434,6 @@ export default function HomeScreen({
             <button
               className="w-full mt-2 text-gray-500 hover:text-gray-300 text-xs py-1 transition-colors"
               onClick={() => setShowDifficultyPicker(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Tournament mode */}
-      <div className="w-full max-w-sm">
-        {!showTournament ? (
-          <button
-            className="w-full bg-amber-700 hover:bg-amber-600 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 border border-amber-600/60"
-            onClick={() => setShowTournament(true)}
-          >
-            🏆 Tournament Mode
-          </button>
-        ) : (
-          <div className="bg-[#1a1833] rounded-xl p-4 border border-amber-600/60">
-            <div className="flex gap-2 mb-3">
-              <button
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tournamentMode === 'join' ? 'bg-amber-700 text-white' : 'bg-[#0f0e17] text-gray-400'}`}
-                onClick={() => setTournamentMode('join')}
-              >
-                Join
-              </button>
-              <button
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tournamentMode === 'create' ? 'bg-amber-700 text-white' : 'bg-[#0f0e17] text-gray-400'}`}
-                onClick={() => setTournamentMode('create')}
-              >
-                Create
-              </button>
-            </div>
-
-            {tournamentMode === 'join' ? (
-              <div>
-                <label className="block text-sm mb-1 text-gray-300">Tournament Code</label>
-                <input
-                  className="w-full bg-[#0f0e17] border border-[#312e6b] rounded-lg px-3 py-2 text-white uppercase tracking-widest text-center font-mono text-lg focus:outline-none focus:border-amber-500 mb-3"
-                  value={tournamentCode}
-                  onChange={e => setTournamentCode(e.target.value.toUpperCase())}
-                  placeholder="XXXXXX"
-                  maxLength={6}
-                />
-                <button
-                  className="w-full bg-amber-700 hover:bg-amber-600 text-white py-2 rounded-lg font-medium transition-colors"
-                  onClick={handleJoinTournament}
-                >
-                  Join Tournament
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm mb-1 text-gray-300">Format</label>
-                  <div className="flex gap-2">
-                    <button
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${tournamentFormat === 'round_robin' ? 'bg-amber-700 border-amber-600 text-white' : 'bg-[#0f0e17] border-[#312e6b] text-gray-400'}`}
-                      onClick={() => setTournamentFormat('round_robin')}
-                    >
-                      Round Robin
-                    </button>
-                    <button
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${tournamentFormat === 'swiss' ? 'bg-amber-700 border-amber-600 text-white' : 'bg-[#0f0e17] border-[#312e6b] text-gray-400'}`}
-                      onClick={() => setTournamentFormat('swiss')}
-                    >
-                      Swiss
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm mb-1 text-gray-300">Max Players</label>
-                  <select
-                    className="w-full bg-[#0f0e17] border border-[#312e6b] rounded-lg px-3 py-2 text-white"
-                    value={tournamentMaxPlayers}
-                    onChange={e => setTournamentMaxPlayers(Number(e.target.value))}
-                  >
-                    {[2,3,4,6,8,12].map(n => (
-                      <option key={n} value={n}>{n} Players</option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  className="w-full bg-amber-700 hover:bg-amber-600 text-white py-2 rounded-lg font-medium transition-colors"
-                  onClick={handleCreateTournament}
-                >
-                  Create Tournament
-                </button>
-              </div>
-            )}
-
-            <button
-              className="w-full mt-2 text-gray-500 hover:text-gray-300 text-xs py-1 transition-colors"
-              onClick={() => setShowTournament(false)}
             >
               Cancel
             </button>

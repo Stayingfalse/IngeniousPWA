@@ -67,8 +67,6 @@ export type LobbyState = {
   turnLimitSeconds: number | null
   spectators?: SpectatorInfo[]
   autoStart?: boolean
-  tournamentId?: string
-  matchId?: string
 }
 
 export type OpenLobbySummary = {
@@ -119,11 +117,6 @@ export type ClientMessage =
   | { type: 'SET_AUTO_START'; enabled: boolean }
   | { type: 'KICK_PLAYER'; targetPlayerId: string }
   | { type: 'PING' }
-  | { type: 'CREATE_TOURNAMENT'; format: TournamentFormat; maxPlayers: number; turnMode: TurnMode; turnLimitSeconds: number | null }
-  | { type: 'JOIN_TOURNAMENT'; tournamentId: string; playerName: string }
-  | { type: 'START_TOURNAMENT' }
-  | { type: 'FORFEIT_GAME_ONLY' }
-  | { type: 'FORFEIT_TOURNAMENT' }
 
 export type ServerMessage =
   | { type: 'JOINED'; playerId: string; seat: number; lobbyState: LobbyState }
@@ -144,68 +137,3 @@ export type ServerMessage =
   | { type: 'LOBBY_CLOSED' }
   | { type: 'ERROR'; code: string; message: string }
   | { type: 'PONG' }
-  | { type: 'TOURNAMENT_JOINED'; tournamentId: string; state: TournamentState }
-  | { type: 'TOURNAMENT_STATE'; state: TournamentState }
-  | { type: 'TOURNAMENT_ROUND_STARTED'; roundNumber: number; myMatchId: string | null; myLobbyId: string | null }
-  | { type: 'TOURNAMENT_FINISHED'; finalStandings: TournamentStanding[] }
-  | { type: 'FORFEIT_CHOICE_REQUESTED' }
-
-export type TournamentFormat = 'round_robin' | 'swiss'
-export type TournamentStatus = 'registering' | 'in_progress' | 'finished'
-
-export type TournamentStanding = {
-  playerId: string
-  playerName: string
-  wins: number
-  losses: number
-  gamesPlayed: number
-  cumulativeMinScore: number
-  cumulativeTotalScore: number
-  eliminated: boolean
-}
-
-export type TournamentPlayerScore = {
-  minScore: number
-  totalScore: number
-}
-
-export type TournamentMatch = {
-  matchId: string
-  lobbyId: string | null
-  roundNumber: number
-  playerIds: string[]
-  status: 'pending' | 'active' | 'finished'
-  winnerId: string | null
-  playerScores: Record<string, TournamentPlayerScore>
-}
-
-export type TournamentRound = {
-  roundNumber: number
-  matches: TournamentMatch[]
-  status: 'pending' | 'active' | 'done'
-}
-
-export type TournamentState = {
-  id: string
-  hostId: string
-  format: TournamentFormat
-  status: TournamentStatus
-  maxPlayers: number
-  totalRounds: number
-  turnMode: TurnMode
-  turnLimitSeconds: number | null
-  players: PlayerInfo[]
-  rounds: TournamentRound[]
-  standings: TournamentStanding[]
-  currentRound: number
-}
-
-export type TournamentSummary = {
-  id: string
-  format: TournamentFormat
-  status: TournamentStatus
-  maxPlayers: number
-  playerCount: number
-  currentRound: number
-  totalRounds: number
-}
