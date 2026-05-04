@@ -28,6 +28,7 @@ import {
 import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys, snapshotQueries } from './database'
 import { AI_PLAYER_ID, chooseBestMove } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
+import { wsError } from '../lib/errors'
 
 // Lazy-load web-push to avoid crashing if not installed
 function sendPushNotification(
@@ -179,6 +180,10 @@ export class GameRoom {
     }
   }
 
+  private sendError(playerId: string, code: string, message?: string): void {
+    this.send(playerId, wsError(code, message))
+  }
+
   broadcast(msg: ServerMessage, excludePlayerId?: string): void {
     for (const [pid, ws] of this.connections) {
       if (pid !== excludePlayerId && ws.readyState === 1) {
@@ -234,12 +239,12 @@ export class GameRoom {
     hexB: AxialCoord,
   ): void {
     if (this.state.status !== 'in_progress') {
-      this.send(playerId, { type: 'ERROR', code: 'GAME_NOT_ACTIVE', message: 'Game is not active' })
+      this.sendError(playerId, 'GAME_NOT_ACTIVE', 'Game is not active')
       return
     }
 
     if (this.state.currentPlayerId !== playerId) {
-      this.send(playerId, { type: 'ERROR', code: 'NOT_YOUR_TURN', message: 'Not your turn' })
+      this.sendError(playerId, 'NOT_YOUR_TURN', 'Not your turn')
       return
     }
 
@@ -252,7 +257,7 @@ export class GameRoom {
       result = applyMove(this.state, playerId, tileIndex, hexA, hexB)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      this.send(playerId, { type: 'ERROR', code: message, message })
+      this.sendError(playerId, 'INVALID_MOVE', message)
       return
     }
 
@@ -304,11 +309,11 @@ export class GameRoom {
   handleSwapRack(playerId: string): void {
     // Swap is only valid as a post-placement action when it was flagged pending
     if (this.pendingSwapPlayerId !== playerId) {
-      this.send(playerId, {
-        type: 'ERROR',
-        code: 'CANNOT_SWAP',
-        message: 'Swap is only available after placing a tile when your refilled rack contains no tiles of your lowest-scoring color',
-      })
+      this.sendError(
+        playerId,
+        'CANNOT_SWAP',
+        'Swap is only available after placing a tile when your refilled rack contains no tiles of your lowest-scoring color',
+      )
       return
     }
 
@@ -345,11 +350,7 @@ export class GameRoom {
 
   handleDeclineSwap(playerId: string): void {
     if (this.pendingSwapPlayerId !== playerId) {
-      this.send(playerId, {
-        type: 'ERROR',
-        code: 'NO_SWAP_PENDING',
-        message: 'No swap is pending for this player',
-      })
+      this.sendError(playerId, 'NO_SWAP_PENDING', 'No swap is pending for this player')
       return
     }
 
@@ -368,7 +369,7 @@ export class GameRoom {
 
   handleForfeit(playerId: string): void {
     if (this.state.status !== 'in_progress') {
-      this.send(playerId, { type: 'ERROR', code: 'GAME_NOT_ACTIVE', message: 'Game is not active' })
+      this.sendError(playerId, 'GAME_NOT_ACTIVE', 'Game is not active')
       return
     }
 
