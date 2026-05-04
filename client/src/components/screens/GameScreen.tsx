@@ -60,6 +60,14 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
   const [turnNotificationKey, setTurnNotificationKey] = useState(0)
   const prevMoveCountRef = useRef<number | null>(null)
 
+  // Clear any lingering "Your Turn" notification when an Ingenious banner starts showing,
+  // preventing it from re-appearing after the Ingenious animation fades.
+  useEffect(() => {
+    if (lastIngenious) {
+      setShowTurnNotification(false)
+    }
+  }, [lastIngenious])
+
   useEffect(() => {
     if (!isMyTurn || !gameState) return
     const moveCount = gameState.moveCount
@@ -298,6 +306,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             currentPlayerId={gameState?.currentPlayerId ?? ''}
             flashColors={scoringAnimation?.flashColors}
             forfeitedPlayerIds={gameState?.forfeitedPlayerIds ?? []}
+            spectators={lobbyState?.spectators ?? []}
           />
         </div>
       </div>

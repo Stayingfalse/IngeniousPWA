@@ -267,6 +267,7 @@ export default function HexBoard({
           <TilePlacementPopup
             hexAPos={hexAPos}
             hexBPos={hexBPos}
+            viewBox={{ minX, maxX, minY, maxY }}
             onFlip={onFlip}
             onConfirm={handlePopupConfirm}
             onCancel={handlePopupCancel}

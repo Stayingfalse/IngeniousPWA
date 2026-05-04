@@ -62,8 +62,8 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           if (currentLobbyId && currentLobbyId !== newLobbyId) {
             const oldLobby = lobbyManager.getLobby(currentLobbyId)
             if (oldLobby) {
-              if (oldLobby.turnMode === 'async' && oldLobby.status === 'in_progress') {
-                // Silently detach — player stays in the async game
+              if (oldLobby.turnMode === 'async' && (oldLobby.status === 'in_progress' || oldLobby.status === 'waiting')) {
+                // Silently detach — player stays in the async game/lobby
                 oldLobby.detachConnection(pid)
               } else {
                 lobbyManager.playerDisconnected(currentLobbyId, pid)
@@ -84,6 +84,12 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           // Spectator path: non-participant watching an in-progress game
           if ('isSpectator' in result && result.isSpectator) {
             isSpectatorConnection = true
+            // Add to lobby spectators list before broadcasting join (WS not added yet)
+            const spectatorEntry = { id: pid, name: playerName }
+            lobby.spectators.push(spectatorEntry)
+            // Notify existing connections about the new spectator
+            lobby.gameRoom!.broadcast({ type: 'SPECTATOR_JOINED', spectator: spectatorEntry })
+            // Now add spectator's WS and send initial state
             lobby.gameRoom!.addSpectatorConnection(pid, socket)
             send({
               type: 'SPECTATING',
@@ -116,9 +122,19 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
             }
           }
 
+          // Auto-start when an async lobby with autoStart=true fills up
+          let autoStarted = false
+          if (!vsAiAutoStarted && lobby.autoStart && lobby.status === 'waiting' && lobby.players.length >= lobby.maxPlayers) {
+            // Use force=true since we bypass the normal host-only restriction
+            const startResult = lobbyManager.startGame(currentLobbyId, pid, true)
+            if (!startResult.error) {
+              autoStarted = true
+            }
+          }
+
           // If game is in progress and this is a reconnect (not a fresh vsAI start),
           // send current state so the player can resume
-          if (lobby.gameRoom && lobby.status === 'in_progress' && !vsAiAutoStarted) {
+          if (lobby.gameRoom && lobby.status === 'in_progress' && !vsAiAutoStarted && !autoStarted) {
             lobby.gameRoom.addConnection(pid, socket)
             const masked = lobby.gameRoom.getMaskedState(pid)
             send({ type: 'STATE_UPDATE', state: masked })
@@ -250,28 +266,26 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
       }
     })
 
-    socket.on('close', () => {
+    const handleDisconnect = () => {
       if (playerId && currentLobbyId) {
         if (isSpectatorConnection) {
-          // Spectators are not tracked as lobby players — just remove their game connection
           const lobby = lobbyManager.getLobby(currentLobbyId)
-          lobby?.gameRoom?.removeSpectatorConnection(playerId)
+          if (lobby) {
+            // Remove from spectator list and WS first, then broadcast departure
+            lobby.spectators = lobby.spectators.filter(s => s.id !== playerId)
+            lobby.gameRoom?.removeSpectatorConnection(playerId)
+            if (lobby.gameRoom) {
+              lobby.gameRoom.broadcast({ type: 'SPECTATOR_LEFT', spectatorId: playerId })
+            }
+          }
         } else {
           lobbyManager.playerDisconnected(currentLobbyId, playerId)
         }
       }
-    })
+    }
 
-    socket.on('error', () => {
-      if (playerId && currentLobbyId) {
-        if (isSpectatorConnection) {
-          const lobby = lobbyManager.getLobby(currentLobbyId)
-          lobby?.gameRoom?.removeSpectatorConnection(playerId)
-        } else {
-          lobbyManager.playerDisconnected(currentLobbyId, playerId)
-        }
-      }
-    })
+    socket.on('close', handleDisconnect)
+    socket.on('error', handleDisconnect)
   })
 }
 

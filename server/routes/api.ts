@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
 import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
-import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats } from '@ingenious/shared'
+import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats, OpenLobbySummary } from '@ingenious/shared'
 import db from '../services/database'
 
 // Valid real-time turn timer presets (seconds). null = async/turn-based.
@@ -75,6 +75,7 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       turnLimitSeconds?: number | null
       vsAI?: boolean
       aiDifficulty?: string
+      autoStart?: boolean
     }
     const vsAI = body?.vsAI === true
     const rawDifficulty = body?.aiDifficulty
@@ -99,9 +100,12 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       turnLimitSeconds = VALID_TURN_LIMITS.has(requested) ? requested : 60
     }
 
-    const lobby = lobbyManager.createLobby(maxPlayers, effectiveTurnMode, turnLimitSeconds, vsAI, aiDifficulty)
+    // autoStart only applies to async (turn-based) lobbies
+    const autoStart = effectiveTurnMode === 'async' ? (body?.autoStart === true) : false
 
-    return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode: effectiveTurnMode, turnLimitSeconds })
+    const lobby = lobbyManager.createLobby(maxPlayers, effectiveTurnMode, turnLimitSeconds, vsAI, aiDifficulty, autoStart)
+
+    return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode: effectiveTurnMode, turnLimitSeconds, autoStart })
   })
 
   // Get lobby info (60 per minute per IP)
@@ -196,6 +200,35 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send({ games })
+  })
+
+  // List waiting async lobbies the player is part of (30 per minute per IP)
+  fastify.get('/api/player/lobbies', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const playerId = player.id
+    const rows = playerGameQueries.findWaitingAsyncForPlayer.all(playerId)
+
+    const lobbies: OpenLobbySummary[] = []
+    for (const row of rows) {
+      const lobby = lobbyManager.getLobby(row.lobby_id)
+      if (!lobby || lobby.status !== 'waiting') continue
+
+      lobbies.push({
+        lobbyId: row.lobby_id,
+        maxPlayers: lobby.maxPlayers,
+        players: lobby.players.map(p => ({ id: p.id, name: p.name, seat: p.seat })),
+        autoStart: lobby.autoStart,
+      })
+    }
+
+    return reply.send({ lobbies })
   })
 
   // Player statistics (30 per minute per IP)

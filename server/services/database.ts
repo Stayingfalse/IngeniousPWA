@@ -73,6 +73,7 @@ const migrations = [
   "ALTER TABLE lobbies ADD COLUMN turn_mode TEXT DEFAULT 'realtime'",
   'ALTER TABLE lobbies ADD COLUMN turn_limit_seconds INTEGER',
   'ALTER TABLE game_results ADD COLUMN win_reason TEXT',
+  'ALTER TABLE lobbies ADD COLUMN auto_start INTEGER DEFAULT 0',
 ]
 for (const sql of migrations) {
   try {
@@ -144,6 +145,7 @@ export interface LobbyRow {
   finished_at: number | null
   turn_mode: string | null
   turn_limit_seconds: number | null
+  auto_start: number | null
 }
 
 export interface LobbyPlayerRow {
@@ -171,10 +173,11 @@ export const playerQueries = {
 
 export const lobbyQueries = {
   findById: db.prepare<[string], LobbyRow>('SELECT * FROM lobbies WHERE id = ?'),
-  insert: db.prepare('INSERT INTO lobbies (id, status, player_count, host_id, turn_mode, turn_limit_seconds) VALUES (?, ?, ?, ?, ?, ?)'),
+  insert: db.prepare('INSERT INTO lobbies (id, status, player_count, host_id, turn_mode, turn_limit_seconds, auto_start) VALUES (?, ?, ?, ?, ?, ?, ?)'),
   updateStatus: db.prepare('UPDATE lobbies SET status = ? WHERE id = ?'),
   setStarted: db.prepare('UPDATE lobbies SET status = ?, started_at = unixepoch() WHERE id = ?'),
   setFinished: db.prepare('UPDATE lobbies SET status = ?, finished_at = unixepoch() WHERE id = ?'),
+  findWaitingAsync: db.prepare<[], LobbyRow>("SELECT * FROM lobbies WHERE status = 'waiting' AND turn_mode = 'async'"),
 }
 
 export const lobbyPlayerQueries = {
@@ -251,6 +254,12 @@ export const playerGameQueries = {
      FROM lobby_players lp
      JOIN lobbies l ON l.id = lp.lobby_id
      WHERE lp.player_id = ? AND l.status = 'in_progress'`,
+  ),
+  findWaitingAsyncForPlayer: db.prepare<[string], ActiveGameRow>(
+    `SELECT lp.lobby_id, l.status, COALESCE(l.turn_mode, 'realtime') as turn_mode, l.turn_limit_seconds
+     FROM lobby_players lp
+     JOIN lobbies l ON l.id = lp.lobby_id
+     WHERE lp.player_id = ? AND l.status = 'waiting' AND l.turn_mode = 'async'`,
   ),
 }
 

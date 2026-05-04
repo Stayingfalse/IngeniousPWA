@@ -1,5 +1,5 @@
 import { WebSocket } from '@fastify/websocket'
-import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, AiDifficulty, GameState } from '@ingenious/shared'
+import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, AiDifficulty, GameState, SpectatorInfo } from '@ingenious/shared'
 import { GameRoom } from './gameRoom'
 import type { GameRoomSnapshot } from './gameRoom'
 import { lobbyQueries, lobbyPlayerQueries, snapshotQueries, playerQueries } from './database'
@@ -17,6 +17,7 @@ export class Lobby {
   id: string
   status: 'waiting' | 'in_progress' | 'finished' = 'waiting'
   players: LobbyPlayer[] = []
+  spectators: SpectatorInfo[] = []
   maxPlayers: number
   hostId: string | null = null
   connections: Map<string, WebSocket> = new Map()
@@ -26,6 +27,7 @@ export class Lobby {
   turnLimitSeconds: number | null
   vsAI: boolean = false
   aiDifficulty: AiDifficulty = 'hard'
+  autoStart: boolean = false
 
   constructor(id: string, maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null) {
     this.id = id
@@ -43,6 +45,8 @@ export class Lobby {
       hostId: this.hostId ?? '',
       turnMode: this.turnMode,
       turnLimitSeconds: this.turnLimitSeconds,
+      spectators: [...this.spectators],
+      autoStart: this.autoStart,
     }
   }
 
@@ -79,21 +83,23 @@ export class LobbyManager {
 
   constructor() {
     this.restoreFromDatabase()
+    this.restoreWaitingLobbies()
     // Periodically clean up stale lobbies to prevent memory leaks
     setInterval(() => this.cleanupLobbies(), 10 * 60 * 1000)
     // Periodically snapshot all in-progress games (safety net)
     setInterval(() => this.flushAllSnapshots(), 60 * 1000)
   }
 
-  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null, vsAI = false, aiDifficulty: AiDifficulty = 'hard'): Lobby {
+  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null, vsAI = false, aiDifficulty: AiDifficulty = 'hard', autoStart = false): Lobby {
     const id = this.generateLobbyCode()
     const lobby = new Lobby(id, maxPlayers, turnMode, turnLimitSeconds)
     lobby.vsAI = vsAI
     lobby.aiDifficulty = aiDifficulty
+    lobby.autoStart = autoStart
     this.lobbies.set(id, lobby)
 
     try {
-      lobbyQueries.insert.run(id, 'waiting', maxPlayers, null, turnMode, turnLimitSeconds)
+      lobbyQueries.insert.run(id, 'waiting', maxPlayers, null, turnMode, turnLimitSeconds, autoStart ? 1 : 0)
     } catch {
       // Non-critical
     }
@@ -166,10 +172,10 @@ export class LobbyManager {
     return { lobby, seat }
   }
 
-  startGame(lobbyId: string, requestingPlayerId: string): { error?: string } {
+  startGame(lobbyId: string, requestingPlayerId: string, force = false): { error?: string } {
     const lobby = this.getLobby(lobbyId)
     if (!lobby) return { error: 'LOBBY_NOT_FOUND' }
-    if (lobby.hostId !== requestingPlayerId) return { error: 'NOT_HOST' }
+    if (!force && lobby.hostId !== requestingPlayerId) return { error: 'NOT_HOST' }
     if (lobby.status !== 'waiting') return { error: 'ALREADY_STARTED' }
     if (lobby.players.length < 2) return { error: 'NOT_ENOUGH_PLAYERS' }
 
@@ -222,9 +228,9 @@ export class LobbyManager {
       lobby.gameRoom.removeConnection(playerId)
     }
 
-    // Don't broadcast PLAYER_LEFT for async in-progress games — players
-    // being offline is expected and the game continues when they return.
-    if (!(lobby.turnMode === 'async' && lobby.status === 'in_progress')) {
+    // Don't broadcast PLAYER_LEFT for async games (in_progress or waiting) — players
+    // being offline is expected and the game/lobby continues when they return.
+    if (!(lobby.turnMode === 'async' && (lobby.status === 'in_progress' || lobby.status === 'waiting'))) {
       lobby.broadcast({ type: 'PLAYER_LEFT', playerId })
     }
   }
@@ -355,6 +361,7 @@ export class LobbyManager {
     const now = Date.now()
     const ONE_HOUR = 60 * 60 * 1000
     const ONE_DAY = 24 * ONE_HOUR
+    const SEVEN_DAYS = 7 * ONE_DAY
     const THIRTY_DAYS = 30 * ONE_DAY
 
     for (const [id, lobby] of this.lobbies) {
@@ -364,7 +371,10 @@ export class LobbyManager {
 
       const shouldRemove =
         lobby.status === 'finished' ||
-        (lobby.status === 'waiting' && idle && age > ONE_HOUR) ||
+        // async waiting lobbies persist for 7 days even when idle
+        (lobby.status === 'waiting' && isAsync && idle && age > SEVEN_DAYS) ||
+        // realtime waiting lobbies expire after 1 hour idle
+        (lobby.status === 'waiting' && !isAsync && idle && age > ONE_HOUR) ||
         // async in-progress games can be idle for up to 30 days
         (lobby.status === 'in_progress' && isAsync && idle && age > THIRTY_DAYS) ||
         // realtime in-progress games expire after 24h idle
@@ -373,6 +383,50 @@ export class LobbyManager {
       if (shouldRemove) {
         this.lobbies.delete(id)
       }
+    }
+  }
+
+  /**
+   * Restore async lobbies still in 'waiting' status from the database.
+   * Called on startup so that players can return to open lobbies across restarts.
+   */
+  private restoreWaitingLobbies(): void {
+    try {
+      const waitingRows = lobbyQueries.findWaitingAsync.all()
+      let restored = 0
+
+      for (const row of waitingRows) {
+        // Skip if this lobby is already loaded in memory (e.g. from restoreFromDatabase)
+        if (this.lobbies.has(row.id)) continue
+
+        const dbPlayers = lobbyPlayerQueries.findByLobby.all(row.id)
+        if (dbPlayers.length === 0) continue
+
+        const turnMode: TurnMode = 'async'
+        const lobby = new Lobby(row.id, row.player_count, turnMode, row.turn_limit_seconds ?? null)
+        lobby.status = 'waiting'
+        lobby.autoStart = row.auto_start === 1
+        lobby.createdAt = (row.created_at || Math.floor(Date.now() / 1000)) * 1000
+
+        const players: LobbyPlayer[] = []
+        for (const lp of dbPlayers) {
+          const playerRow = playerQueries.findById.get(lp.player_id)
+          const name = playerRow?.display_name ?? `Player_${lp.player_id.slice(0, 6)}`
+          players.push({ id: lp.player_id, seat: lp.seat_index, name, isAI: lp.player_id === AI_PLAYER_ID })
+        }
+
+        lobby.players = players
+        lobby.hostId = row.host_id ?? players[0]?.id ?? null
+
+        this.lobbies.set(row.id, lobby)
+        restored++
+      }
+
+      if (restored > 0) {
+        console.log(`[LobbyManager] Restored ${restored} waiting async lobby(ies) from database`)
+      }
+    } catch (err) {
+      console.error('[LobbyManager] Failed to restore waiting lobbies:', err)
     }
   }
 }
