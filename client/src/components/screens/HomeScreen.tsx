@@ -157,7 +157,7 @@ export default function HomeScreen({
       {activeGames.length > 0 && (
         <div className="w-full max-w-sm">
           <h2 className="text-xs font-semibold text-gray-400 mb-2 uppercase tracking-wider">
-            Your Turn-Based Games
+            Games in Progress
           </h2>
           <div className="space-y-2">
             {activeGames.map(game => {
