@@ -5,10 +5,13 @@ import { useGameStore } from './store/gameStore'
 import HomeScreen from './components/screens/HomeScreen'
 import LobbyScreen from './components/screens/LobbyScreen'
 import GameScreen from './components/screens/GameScreen'
+import TournamentLobbyScreen from './components/screens/TournamentLobbyScreen'
+import TournamentScreen from './components/screens/TournamentScreen'
 import type { ServerMessage, ActiveGameSummary, OpenLobbySummary } from '@ingenious/shared'
 import { wsClient } from './lib/wsClient'
+import { useTournamentStore } from './store/tournamentStore'
 
-type Screen = 'home' | 'lobby' | 'game'
+type Screen = 'home' | 'lobby' | 'game' | 'tournament_lobby' | 'tournament'
 
 /** How often (ms) to refresh the active-games list while on the home screen. */
 const ACTIVE_GAMES_POLL_INTERVAL_MS = 30_000
@@ -19,6 +22,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false)
   const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating, spectatorJoined, spectatorLeft, setOpenLobbies, openLobbies, updateLobbyState } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
+  const { setTournament, updateTournamentState, setRoundStarted, setFinalStandings, myLobbyId } = useTournamentStore()
 
   const fetchActiveGames = useCallback(() => {
     fetch('/api/player/games', { credentials: 'include' })
@@ -152,8 +156,35 @@ export default function App() {
           setErrorMessage(msg.message || 'An error occurred')
         }
         break
+
+      case 'TOURNAMENT_JOINED':
+        setTournament(msg.tournamentId, msg.state)
+        setScreen('tournament_lobby')
+        break
+
+      case 'TOURNAMENT_STATE':
+        updateTournamentState(msg.state)
+        if (msg.state.status === 'in_progress' && screen !== 'tournament' && screen !== 'game') {
+          setScreen('tournament')
+        }
+        break
+
+      case 'TOURNAMENT_ROUND_STARTED':
+        setRoundStarted(msg.roundNumber, msg.myMatchId, msg.myLobbyId)
+        setScreen('tournament')
+        break
+
+      case 'TOURNAMENT_FINISHED':
+        setFinalStandings(msg.finalStandings)
+        setScreen('tournament')
+        break
+
+      case 'FORFEIT_CHOICE_REQUESTED':
+        // Show forfeit options - for now, default to forfeiting just the game
+        // The GameScreen component will handle the choice UI
+        break
     }
-  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver, spectatorJoined, spectatorLeft, updateLobbyState])
+  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver, spectatorJoined, spectatorLeft, updateLobbyState, setTournament, updateTournamentState, setRoundStarted, setFinalStandings, screen])
 
   const { connected } = useWebSocket(handleMessage, authReady)
 
@@ -319,6 +350,14 @@ export default function App() {
       )}
       {screen === 'lobby' && <LobbyScreen onNavigate={setScreen} />}
       {screen === 'game' && <GameScreen onNavigateHome={handleNavigateHome} />}
+      {screen === 'tournament_lobby' && <TournamentLobbyScreen />}
+      {screen === 'tournament' && (
+        <TournamentScreen
+          onEnterMatch={(lobbyId) => {
+            wsClient.send({ type: 'JOIN_LOBBY', lobbyId, playerName: myPlayerName })
+          }}
+        />
+      )}
     </div>
   )
 }

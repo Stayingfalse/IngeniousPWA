@@ -64,6 +64,69 @@ db.exec(`
     player_names_json TEXT NOT NULL,
     snapshot_at INTEGER DEFAULT (unixepoch())
   );
+
+  CREATE TABLE IF NOT EXISTS tournaments (
+    id TEXT PRIMARY KEY,
+    host_id TEXT NOT NULL,
+    format TEXT NOT NULL,
+    status TEXT DEFAULT 'registering',
+    max_players INTEGER NOT NULL,
+    total_rounds INTEGER NOT NULL,
+    turn_mode TEXT NOT NULL,
+    turn_limit_seconds INTEGER,
+    created_at INTEGER DEFAULT (unixepoch()),
+    finished_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS tournament_players (
+    tournament_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    eliminated INTEGER DEFAULT 0,
+    joined_at INTEGER DEFAULT (unixepoch()),
+    PRIMARY KEY (tournament_id, player_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS tournament_rounds (
+    tournament_id TEXT NOT NULL,
+    round_number INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    PRIMARY KEY (tournament_id, round_number)
+  );
+
+  CREATE TABLE IF NOT EXISTS tournament_matches (
+    id TEXT PRIMARY KEY,
+    tournament_id TEXT NOT NULL,
+    round_number INTEGER NOT NULL,
+    lobby_id TEXT,
+    status TEXT DEFAULT 'pending',
+    winner_id TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS tournament_match_players (
+    match_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    PRIMARY KEY (match_id, player_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS tournament_player_scores (
+    match_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    min_score INTEGER NOT NULL DEFAULT 0,
+    total_score INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (match_id, player_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS tournament_standings (
+    tournament_id TEXT NOT NULL,
+    player_id TEXT NOT NULL,
+    wins INTEGER DEFAULT 0,
+    losses INTEGER DEFAULT 0,
+    games_played INTEGER DEFAULT 0,
+    cumulative_min_score INTEGER DEFAULT 0,
+    cumulative_total_score INTEGER DEFAULT 0,
+    eliminated INTEGER DEFAULT 0,
+    PRIMARY KEY (tournament_id, player_id)
+  );
 `)
 
 // ── Schema migrations ────────────────────────────────────────────────────────
@@ -313,3 +376,109 @@ export const globalStatQueries = {
 }
 
 export default db
+
+// ── Tournament row types ──────────────────────────────────────────────────────
+
+export interface TournamentRow {
+  id: string
+  host_id: string
+  format: string
+  status: string
+  max_players: number
+  total_rounds: number
+  turn_mode: string
+  turn_limit_seconds: number | null
+  created_at: number
+  finished_at: number | null
+}
+
+export interface TournamentPlayerRow {
+  tournament_id: string
+  player_id: string
+  eliminated: number
+  joined_at: number
+}
+
+export interface TournamentRoundRow {
+  tournament_id: string
+  round_number: number
+  status: string
+}
+
+export interface TournamentMatchRow {
+  id: string
+  tournament_id: string
+  round_number: number
+  lobby_id: string | null
+  status: string
+  winner_id: string | null
+}
+
+export interface TournamentMatchPlayerRow {
+  match_id: string
+  player_id: string
+}
+
+export interface TournamentPlayerScoreRow {
+  match_id: string
+  player_id: string
+  min_score: number
+  total_score: number
+}
+
+export interface TournamentStandingRow {
+  tournament_id: string
+  player_id: string
+  wins: number
+  losses: number
+  games_played: number
+  cumulative_min_score: number
+  cumulative_total_score: number
+  eliminated: number
+}
+
+// ── Tournament queries ────────────────────────────────────────────────────────
+
+export const tournamentQueries = {
+  insert: db.prepare('INSERT INTO tournaments (id, host_id, format, status, max_players, total_rounds, turn_mode, turn_limit_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+  findById: db.prepare<[string], TournamentRow>('SELECT * FROM tournaments WHERE id = ?'),
+  findActive: db.prepare<[], TournamentRow>("SELECT * FROM tournaments WHERE status != 'finished'"),
+  updateStatus: db.prepare("UPDATE tournaments SET status = ? WHERE id = ?"),
+  setFinished: db.prepare("UPDATE tournaments SET status = 'finished', finished_at = unixepoch() WHERE id = ?"),
+}
+
+export const tournamentPlayerQueries = {
+  insert: db.prepare('INSERT OR IGNORE INTO tournament_players (tournament_id, player_id) VALUES (?, ?)'),
+  findByTournament: db.prepare<[string], TournamentPlayerRow>('SELECT * FROM tournament_players WHERE tournament_id = ?'),
+  setEliminated: db.prepare('UPDATE tournament_players SET eliminated = 1 WHERE tournament_id = ? AND player_id = ?'),
+}
+
+export const tournamentRoundQueries = {
+  insert: db.prepare('INSERT OR REPLACE INTO tournament_rounds (tournament_id, round_number, status) VALUES (?, ?, ?)'),
+  findByTournament: db.prepare<[string], TournamentRoundRow>('SELECT * FROM tournament_rounds WHERE tournament_id = ? ORDER BY round_number'),
+}
+
+export const tournamentMatchQueries = {
+  insert: db.prepare('INSERT OR IGNORE INTO tournament_matches (id, tournament_id, round_number, lobby_id, status) VALUES (?, ?, ?, ?, ?)'),
+  findByTournamentRound: db.prepare<[string, number], TournamentMatchRow>('SELECT * FROM tournament_matches WHERE tournament_id = ? AND round_number = ?'),
+  updateStatus: db.prepare('UPDATE tournament_matches SET status = ?, winner_id = ? WHERE id = ?'),
+}
+
+export const tournamentMatchPlayerQueries = {
+  insert: db.prepare('INSERT OR IGNORE INTO tournament_match_players (match_id, player_id) VALUES (?, ?)'),
+  findByMatch: db.prepare<[string], TournamentMatchPlayerRow>('SELECT * FROM tournament_match_players WHERE match_id = ?'),
+}
+
+export const tournamentPlayerScoreQueries = {
+  upsert: db.prepare(`INSERT INTO tournament_player_scores (match_id, player_id, min_score, total_score)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(match_id, player_id) DO UPDATE SET min_score=excluded.min_score, total_score=excluded.total_score`),
+  findByMatch: db.prepare<[string], TournamentPlayerScoreRow>('SELECT * FROM tournament_player_scores WHERE match_id = ?'),
+}
+
+export const tournamentStandingQueries = {
+  upsert: db.prepare(`INSERT INTO tournament_standings (tournament_id, player_id, wins, losses, games_played, cumulative_min_score, cumulative_total_score, eliminated)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(tournament_id, player_id) DO UPDATE SET wins=excluded.wins, losses=excluded.losses, games_played=excluded.games_played, cumulative_min_score=excluded.cumulative_min_score, cumulative_total_score=excluded.cumulative_total_score, eliminated=excluded.eliminated`),
+  findByTournament: db.prepare<[string], TournamentStandingRow>('SELECT * FROM tournament_standings WHERE tournament_id = ?'),
+}

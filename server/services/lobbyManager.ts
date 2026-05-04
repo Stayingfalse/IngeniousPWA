@@ -28,6 +28,8 @@ export class Lobby {
   vsAI: boolean = false
   aiDifficulty: AiDifficulty = 'hard'
   autoStart: boolean = false
+  tournamentId?: string
+  matchId?: string
 
   constructor(id: string, maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null) {
     this.id = id
@@ -47,6 +49,8 @@ export class Lobby {
       turnLimitSeconds: this.turnLimitSeconds,
       spectators: [...this.spectators],
       autoStart: this.autoStart,
+      tournamentId: this.tournamentId,
+      matchId: this.matchId,
     }
   }
 
@@ -294,6 +298,69 @@ export class LobbyManager {
     }
 
     return {}
+  }
+
+  createTournamentLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null, tournamentId: string, matchId: string): Lobby {
+    const lobby = this.createLobby(maxPlayers, turnMode, turnLimitSeconds)
+    lobby.tournamentId = tournamentId
+    lobby.matchId = matchId
+    return lobby
+  }
+
+  joinTournamentLobby(lobbyId: string, playerId: string, playerName: string, ws: WebSocket): void {
+    const lobby = this.getLobby(lobbyId)
+    if (!lobby) return
+    const existing = lobby.players.find(p => p.id === playerId)
+    if (!existing) {
+      const seat = lobby.players.length
+      lobby.players.push({ id: playerId, name: playerName, seat })
+      if (!lobby.hostId) lobby.hostId = playerId
+      try {
+        lobbyPlayerQueries.insert.run(lobbyId, playerId, seat)
+      } catch { /* non-critical */ }
+    }
+    lobby.connections.set(playerId, ws)
+  }
+
+  startTournamentGame(lobbyId: string, playerNames: Record<string, string>): void {
+    const lobby = this.getLobby(lobbyId)
+    if (!lobby || lobby.status !== 'waiting') return
+
+    const playerIds = lobby.players.map(p => p.id)
+    const names: Record<string, string> = {}
+    for (const p of lobby.players) {
+      names[p.id] = playerNames[p.id] ?? p.name
+    }
+
+    const turnLimitMs = lobby.turnLimitSeconds !== null ? lobby.turnLimitSeconds * 1000 : null
+    const gameRoom = new GameRoom(lobbyId, playerIds, names, turnLimitMs, new Set(), 'hard')
+    gameRoom.onAfterMove = () => this.saveSnapshot(lobbyId)
+
+    if (lobby.tournamentId) {
+      const tid = lobby.tournamentId
+      gameRoom.onGameOver = (results) => {
+        import('./tournamentManager').then(({ tournamentManager }) => {
+          tournamentManager.onGameFinished(lobbyId, results)
+        }).catch(() => {})
+      }
+    }
+
+    lobby.gameRoom = gameRoom
+    lobby.status = 'in_progress'
+
+    for (const player of lobby.players) {
+      const ws = lobby.connections.get(player.id)
+      if (ws) gameRoom.addConnection(player.id, ws)
+    }
+
+    try {
+      lobbyQueries.setStarted.run('in_progress', lobbyId)
+    } catch { /* non-critical */ }
+
+    for (const player of lobby.players) {
+      const masked = gameRoom.getMaskedState(player.id)
+      lobby.send(player.id, { type: 'GAME_STARTED', state: masked })
+    }
   }
 
   playerDisconnected(lobbyId: string, playerId: string): void {

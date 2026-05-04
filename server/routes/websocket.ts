@@ -3,6 +3,7 @@ import type { WebSocket } from '@fastify/websocket'
 import type { ClientMessage } from '@ingenious/shared'
 import { playerQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
+import { tournamentManager } from '../services/tournamentManager'
 import { v4 as uuidv4 } from 'uuid'
 
 export default async function websocketRoutes(fastify: FastifyInstance) {
@@ -10,6 +11,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
     let playerId: string | null = null
     let currentLobbyId: string | null = null
     let isSpectatorConnection = false
+    let currentTournamentId: string | null = null
 
     const send = (msg: object) => {
       if (socket.readyState === 1) {
@@ -241,7 +243,122 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
             return
           }
 
+          if (currentTournamentId) {
+            // In a tournament, ask if they want to forfeit just this game or the whole tournament
+            send({ type: 'FORFEIT_CHOICE_REQUESTED' })
+          } else {
+            lobby.gameRoom.handleForfeit(playerId)
+          }
+          break
+        }
+
+        case 'CREATE_TOURNAMENT': {
+          if (!playerId) {
+            send({ type: 'ERROR', code: 'NOT_AUTHENTICATED', message: 'Not authenticated' })
+            return
+          }
+          const playerRow = playerQueries.findById.get(playerId)
+          const result = tournamentManager.createTournament(
+            playerId,
+            playerRow?.display_name ?? 'Host',
+            msg.format,
+            msg.maxPlayers,
+            msg.turnMode,
+            msg.turnLimitSeconds,
+          )
+          if ('error' in result) {
+            send({ type: 'ERROR', code: result.error, message: result.error })
+            return
+          }
+          currentTournamentId = result.tournamentId
+          const joinResult = tournamentManager.joinTournament(result.tournamentId, playerId, playerRow?.display_name ?? 'Host', socket)
+          if (joinResult.error) {
+            send({ type: 'ERROR', code: joinResult.error, message: joinResult.error })
+          }
+          break
+        }
+
+        case 'JOIN_TOURNAMENT': {
+          const { tournamentId, playerName } = msg
+
+          const token = extractToken(request.headers.cookie)
+          let pid = playerId
+
+          if (!pid) {
+            if (token) {
+              const player = playerQueries.findByToken.get(token)
+              if (player) {
+                pid = player.id
+                playerQueries.updateName.run(playerName.trim() || player.display_name, pid)
+              }
+            }
+            if (!pid) {
+              pid = uuidv4()
+              const newToken = uuidv4()
+              const name = playerName.trim() || `Player_${pid.slice(0, 6)}`
+              playerQueries.insert.run(pid, name, newToken)
+            }
+            playerId = pid
+          }
+
+          currentTournamentId = tournamentId.toUpperCase()
+          const playerRow2 = playerQueries.findById.get(pid)
+          const joinResult2 = tournamentManager.joinTournament(
+            currentTournamentId,
+            pid,
+            playerRow2?.display_name ?? playerName,
+            socket,
+          )
+          if (joinResult2.error) {
+            send({ type: 'ERROR', code: joinResult2.error, message: joinResult2.error })
+          }
+          break
+        }
+
+        case 'START_TOURNAMENT': {
+          if (!playerId || !currentTournamentId) {
+            send({ type: 'ERROR', code: 'NOT_IN_TOURNAMENT', message: 'Not in a tournament' })
+            return
+          }
+          const startResult = tournamentManager.startTournament(currentTournamentId, playerId)
+          if (startResult.error) {
+            send({ type: 'ERROR', code: startResult.error, message: startResult.error })
+          }
+          break
+        }
+
+        case 'FORFEIT_GAME_ONLY': {
+          if (!playerId || !currentLobbyId) {
+            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            return
+          }
+          const lobby = lobbyManager.getLobby(currentLobbyId)
+          if (!lobby?.gameRoom) {
+            send({ type: 'ERROR', code: 'NO_GAME', message: 'No active game' })
+            return
+          }
+          if (currentTournamentId) {
+            tournamentManager.handleForfeitGame(currentTournamentId, playerId, currentLobbyId)
+          }
           lobby.gameRoom.handleForfeit(playerId)
+          break
+        }
+
+        case 'FORFEIT_TOURNAMENT': {
+          if (!playerId || !currentTournamentId) {
+            send({ type: 'ERROR', code: 'NOT_IN_TOURNAMENT', message: 'Not in a tournament' })
+            return
+          }
+          if (currentLobbyId) {
+            const lobby = lobbyManager.getLobby(currentLobbyId)
+            if (lobby?.gameRoom) {
+              if (currentTournamentId) {
+                tournamentManager.handleForfeitGame(currentTournamentId, playerId, currentLobbyId)
+              }
+              lobby.gameRoom.handleForfeit(playerId)
+            }
+          }
+          tournamentManager.handleForfeitTournament(currentTournamentId, playerId)
           break
         }
 
