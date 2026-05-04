@@ -91,8 +91,18 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           const playerInfo = { id: pid, name: playerName, seat }
           lobby.broadcast({ type: 'PLAYER_JOINED', player: playerInfo }, pid)
 
-          // If game is in progress, send current state
-          if (lobby.gameRoom && lobby.status === 'in_progress') {
+          // Auto-start vsAI game when the human player has joined (AI was already added)
+          let vsAiAutoStarted = false
+          if (lobby.vsAI && lobby.status === 'waiting' && lobby.players.length >= lobby.maxPlayers) {
+            const startResult = lobbyManager.startGame(currentLobbyId, pid)
+            if (!startResult.error) {
+              vsAiAutoStarted = true
+            }
+          }
+
+          // If game is in progress and this is a reconnect (not a fresh vsAI start),
+          // send current state so the player can resume
+          if (lobby.gameRoom && lobby.status === 'in_progress' && !vsAiAutoStarted) {
             lobby.gameRoom.addConnection(pid, socket)
             const masked = lobby.gameRoom.getMaskedState(pid)
             send({ type: 'STATE_UPDATE', state: masked })

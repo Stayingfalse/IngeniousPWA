@@ -68,6 +68,32 @@ export default function HomeScreen({
     }
   }, [])
 
+  const handlePlayVsComputer = async () => {
+    const name = playerName.trim() || myPlayerName || 'Player'
+    setError('')
+    localStorage.setItem('playerName', name)
+    try {
+      const res = await fetch('/api/lobbies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vsAI: true }),
+        credentials: 'include',
+      })
+      const data = await res.json() as { lobbyId?: string; error?: string }
+      if (!data.lobbyId) {
+        setError(data.error || 'Failed to start game')
+        return
+      }
+      wsClient.send({
+        type: 'JOIN_LOBBY',
+        lobbyId: data.lobbyId,
+        playerName: name,
+      })
+    } catch {
+      setError('Network error')
+    }
+  }
+
   const handleJoin = () => {
     const name = playerName.trim() || myPlayerName || 'Player'
     if (!lobbyCode.trim()) {
@@ -292,6 +318,16 @@ export default function HomeScreen({
         )}
 
         {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+      </div>
+
+      {/* Play vs Computer — single-player option */}
+      <div className="w-full max-w-sm">
+        <button
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 border border-indigo-500/60"
+          onClick={() => void handlePlayVsComputer()}
+        >
+          🤖 Play vs Computer
+        </button>
       </div>
 
       {/* How to Play link */}
