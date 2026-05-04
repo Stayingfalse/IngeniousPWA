@@ -1,7 +1,7 @@
 {
   "name": "ingenious",
   "private": true,
-  "version": "1.11.0",
+  "version": "1.12.0",
   "scripts": {
     "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
     "build": "pnpm --filter @ingenious/shared build && pnpm --filter @ingenious/server build && pnpm --filter @ingenious/client build",
