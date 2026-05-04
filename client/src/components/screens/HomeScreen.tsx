@@ -4,7 +4,7 @@ import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
 import HowToPlayModal from '../ui/HowToPlayModal'
 import StatsPanel from '../ui/StatsPanel'
-import type { TurnMode, ActiveGameSummary } from '@ingenious/shared'
+import type { TurnMode, AiDifficulty, ActiveGameSummary } from '@ingenious/shared'
 
 const TIMER_PRESETS: { label: string; seconds: number }[] = [
   { label: '30 s', seconds: 30 },
@@ -33,6 +33,7 @@ export default function HomeScreen({
   const [turnLimitSeconds, setTurnLimitSeconds] = useState<number>(60)
   const [error, setError] = useState('')
   const [showHowToPlay, setShowHowToPlay] = useState(false)
+  const [showDifficultyPicker, setShowDifficultyPicker] = useState(false)
 
   // Display global error if provided
   useEffect(() => {
@@ -68,15 +69,16 @@ export default function HomeScreen({
     }
   }, [])
 
-  const handlePlayVsComputer = async () => {
+  const handlePlayVsComputer = async (difficulty: AiDifficulty) => {
     const name = playerName.trim() || myPlayerName || 'Player'
     setError('')
+    setShowDifficultyPicker(false)
     localStorage.setItem('playerName', name)
     try {
       const res = await fetch('/api/lobbies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vsAI: true }),
+        body: JSON.stringify({ vsAI: true, aiDifficulty: difficulty }),
         credentials: 'include',
       })
       const data = await res.json() as { lobbyId?: string; error?: string }
@@ -322,12 +324,44 @@ export default function HomeScreen({
 
       {/* Play vs Computer — single-player option */}
       <div className="w-full max-w-sm">
-        <button
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 border border-indigo-500/60"
-          onClick={() => void handlePlayVsComputer()}
-        >
-          🤖 Play vs Computer
-        </button>
+        {!showDifficultyPicker ? (
+          <button
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 border border-indigo-500/60"
+            onClick={() => setShowDifficultyPicker(true)}
+          >
+            🤖 Play vs Computer
+          </button>
+        ) : (
+          <div className="bg-[#1a1833] rounded-xl p-4 border border-indigo-500/60">
+            <p className="text-sm text-gray-300 text-center mb-3 font-medium">Choose Difficulty</p>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                onClick={() => void handlePlayVsComputer('easy')}
+              >
+                😊 Easy
+              </button>
+              <button
+                className="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                onClick={() => void handlePlayVsComputer('medium')}
+              >
+                🤔 Medium
+              </button>
+              <button
+                className="flex-1 bg-red-700 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
+                onClick={() => void handlePlayVsComputer('hard')}
+              >
+                😈 Hard
+              </button>
+            </div>
+            <button
+              className="w-full mt-2 text-gray-500 hover:text-gray-300 text-xs py-1 transition-colors"
+              onClick={() => setShowDifficultyPicker(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
 
       {/* How to Play link */}
@@ -342,7 +376,6 @@ export default function HomeScreen({
       <p className="text-gray-600 text-xs text-center max-w-sm px-2">
         Ingenious is a board game originally designed by Reiner Knizia and published by Sophisticated Games Ltd. / Rio Grande Games. This fan-made web implementation is not affiliated with or endorsed by the original creators or rights holders.
       </p>
-    <script data-name="BMC-Widget" data-cfasync="false" src="https://cdnjs.buymeacoffee.com/1.0.0/widget.prod.min.js" data-id="cezzt" data-description="Support me on Buy me a coffee!" data-message="Help keep this apps servers running and buy me a coffee. " data-color="#BD5FFF" data-position="Right" data-x_margin="18" data-y_margin="18"></script>
-   </div>
-      )
+    </div>
+  )
 }

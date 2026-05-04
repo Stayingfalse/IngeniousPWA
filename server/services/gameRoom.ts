@@ -8,6 +8,7 @@ import type {
   AxialCoord,
   Tile,
   LastMove,
+  AiDifficulty,
 } from '@ingenious/shared'
 import {
   applyMove,
@@ -78,6 +79,8 @@ export class GameRoom {
   onAfterMove: (() => void) | null = null
   // Set of player IDs that are AI-controlled
   private aiPlayerIds: Set<string> = new Set()
+  // AI difficulty level
+  private aiDifficulty: AiDifficulty = 'hard'
 
   constructor(
     lobbyId: string,
@@ -85,10 +88,12 @@ export class GameRoom {
     playerNames: Record<string, string>,
     turnLimitMs: number | null,
     aiPlayerIds?: Set<string>,
+    aiDifficulty: AiDifficulty = 'hard',
   ) {
     this.lobbyId = lobbyId
     this.turnLimitMs = turnLimitMs
     this.aiPlayerIds = aiPlayerIds ?? new Set()
+    this.aiDifficulty = aiDifficulty
     for (const [id, name] of Object.entries(playerNames)) {
       this.playerNames.set(id, name)
     }
@@ -230,14 +235,12 @@ export class GameRoom {
       }
     }
 
-    // Announce INGENIOUS! events
-    for (const color of ingenious) {
-      this.broadcast({ type: 'INGENIOUS', playerId, color })
-    }
-
-    // Check instant win (all 18s)
+    // Check instant win (all 18s) — send INGENIOUS before GAME_OVER if applicable
     const instantWinner = checkWinCondition(this.state)
     if (instantWinner) {
+      for (const color of ingenious) {
+        this.broadcast({ type: 'INGENIOUS', playerId, color })
+      }
       this.finishGame(instantWinner, 'all_eighteen')
       return
     }
@@ -247,10 +250,18 @@ export class GameRoom {
       this.state = { ...this.state, bonusTurnsOwed: this.state.bonusTurnsOwed - 1 }
       this.startTurnTimer()
       this.refillAndBroadcast(playerId, false)
+      // Announce INGENIOUS! events after STATE_UPDATE so scores are current
+      for (const color of ingenious) {
+        this.broadcast({ type: 'INGENIOUS', playerId, color })
+      }
       return
     }
 
     this.refillAndBroadcast(playerId, true)
+    // Announce INGENIOUS! events after STATE_UPDATE so scores are current
+    for (const color of ingenious) {
+      this.broadcast({ type: 'INGENIOUS', playerId, color })
+    }
   }
 
   handleSwapRack(playerId: string): void {
@@ -467,7 +478,7 @@ export class GameRoom {
   private handleAiMove(): void {
     const playerId = this.state.currentPlayerId
     if (!this.aiPlayerIds.has(playerId)) return
-    const move = chooseBestMove(this.state, playerId)
+    const move = chooseBestMove(this.state, playerId, this.aiDifficulty)
     if (!move) return // checkForNoMoves should have ended the game already
     this.handlePlaceTile(playerId, move.tileIndex, move.hexA, move.hexB)
   }

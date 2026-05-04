@@ -48,6 +48,8 @@ export type PlayerInfo = {
 
 export type TurnMode = 'realtime' | 'async'
 
+export type AiDifficulty = 'easy' | 'medium' | 'hard'
+
 export type LobbyState = {
   id: string
   status: GameStatus

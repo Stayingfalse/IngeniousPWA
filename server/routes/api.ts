@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
 import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
-import type { TurnMode, ActiveGameSummary, PlayerStats, GlobalStats } from '@ingenious/shared'
+import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats } from '@ingenious/shared'
 import db from '../services/database'
 
 // Valid real-time turn timer presets (seconds). null = async/turn-based.
@@ -74,8 +74,14 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       turnMode?: string
       turnLimitSeconds?: number | null
       vsAI?: boolean
+      aiDifficulty?: string
     }
     const vsAI = body?.vsAI === true
+    const rawDifficulty = body?.aiDifficulty
+    const aiDifficulty: AiDifficulty =
+      rawDifficulty === 'easy' || rawDifficulty === 'medium' || rawDifficulty === 'hard'
+        ? rawDifficulty
+        : 'hard'
     const maxPlayers = vsAI ? 2 : Math.min(4, Math.max(2, body?.maxPlayers ?? 2))
 
     const rawMode = body?.turnMode ?? 'realtime'
@@ -92,7 +98,7 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       turnLimitSeconds = VALID_TURN_LIMITS.has(requested) ? requested : 60
     }
 
-    const lobby = lobbyManager.createLobby(maxPlayers, turnMode, turnLimitSeconds, vsAI)
+    const lobby = lobbyManager.createLobby(maxPlayers, turnMode, turnLimitSeconds, vsAI, aiDifficulty)
 
     return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode, turnLimitSeconds })
   })
