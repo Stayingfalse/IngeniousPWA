@@ -31,7 +31,9 @@ export default function GameOverModal({ results, myPlayerId, playerNames, onClos
         <p className="text-center text-gray-400 text-sm mb-4">
           {results.reason === 'all_eighteen'
             ? `${winnerName} reached 18 in all colors!`
-            : `Winner: ${winnerName} (highest minimum score)`}
+            : results.reason === 'forfeit'
+              ? (results.winner ? `${winnerName} won — all other players forfeited!` : 'All players forfeited!')
+              : `Winner: ${winnerName} (highest minimum score)`}
         </p>
 
         <div className="space-y-3 mb-6">

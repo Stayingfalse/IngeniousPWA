@@ -333,5 +333,6 @@ export function initGameState(
     firstTurnPlayersRemaining: [...playerIds],
     usedStartSymbols: [],
     radius,
+    forfeitedPlayerIds: [],
   }
 }

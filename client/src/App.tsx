@@ -84,6 +84,11 @@ export default function App() {
         localStorage.removeItem('lastLobbyId')
         break
 
+      case 'PLAYER_FORFEITED':
+        // The following STATE_UPDATE will carry the updated forfeitedPlayerIds;
+        // no additional client state change needed here.
+        break
+
       case 'ERROR':
         console.error('[WS Error]', msg.code, msg.message)
         // Display error to user based on error code

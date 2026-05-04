@@ -110,7 +110,7 @@ export class GameRoom {
     const room = Object.create(GameRoom.prototype) as GameRoom
     room.lobbyId = lobbyId
     room.turnLimitMs = data.turnLimitMs
-    room.state = data.state
+    room.state = { ...data.state, forfeitedPlayerIds: data.state.forfeitedPlayerIds ?? [] }
     room.connections = new Map()
     room.startedAt = Date.now()
     room.playerNames = new Map(Object.entries(data.playerNames))
@@ -306,6 +306,48 @@ export class GameRoom {
     }
   }
 
+  handleForfeit(playerId: string): void {
+    if (this.state.status !== 'in_progress') {
+      this.send(playerId, { type: 'ERROR', code: 'GAME_NOT_ACTIVE', message: 'Game is not active' })
+      return
+    }
+
+    const alreadyForfeited = (this.state.forfeitedPlayerIds ?? []).includes(playerId)
+    if (alreadyForfeited) return
+
+    // Mark as forfeited
+    const forfeitedPlayerIds = [...(this.state.forfeitedPlayerIds ?? []), playerId]
+    this.state = { ...this.state, forfeitedPlayerIds }
+
+    // Inform all connected players
+    this.broadcast({ type: 'PLAYER_FORFEITED', playerId })
+
+    // If only 1 active player remains they win by forfeit
+    const activePlayers = this.state.playerOrder.filter(p => !forfeitedPlayerIds.includes(p))
+    if (activePlayers.length <= 1) {
+      const winner = activePlayers[0] ?? null
+      this.finishGame(winner, 'forfeit')
+      return
+    }
+
+    // If the forfeiting player currently held the turn, advance past them
+    if (this.state.currentPlayerId === playerId) {
+      this.clearTurnTimer()
+      this.pendingSwapPlayerId = null
+      this.advanceTurn(playerId)
+      this.checkForNoMoves()
+      if (this.state.status === 'in_progress') {
+        this.startTurnTimer()
+        this.notifyCurrentPlayerIfOffline()
+      }
+    }
+
+    this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
+  }
+
   private refillAndBroadcast(playerId: string, advanceTurn: boolean): void {
     // Refill current player's rack
     const rack = this.state.playerRacks[playerId] || []
@@ -356,22 +398,33 @@ export class GameRoom {
   }
 
   private advanceTurn(playerId: string): void {
-    const currentIndex = this.state.playerOrder.indexOf(playerId)
-    const nextIndex = (currentIndex + 1) % this.state.playerOrder.length
-    this.state = { ...this.state, currentPlayerId: this.state.playerOrder[nextIndex] }
+    const forfeited = new Set(this.state.forfeitedPlayerIds ?? [])
+    const order = this.state.playerOrder
+    const currentIndex = order.indexOf(playerId)
+    let nextIndex = (currentIndex + 1) % order.length
+    // Skip over any forfeited players
+    for (let i = 0; i < order.length; i++) {
+      if (!forfeited.has(order[nextIndex])) break
+      nextIndex = (nextIndex + 1) % order.length
+    }
+    this.state = { ...this.state, currentPlayerId: order[nextIndex] }
   }
 
   private checkForNoMoves(): void {
-    const totalPlayers = this.state.playerOrder.length
-    let skipped = 0
+    const forfeited = new Set(this.state.forfeitedPlayerIds ?? [])
+    const activePlayers = this.state.playerOrder.filter(p => !forfeited.has(p))
+    if (activePlayers.length === 0) return
 
-    while (skipped < totalPlayers && !hasLegalMove(this.state, this.state.currentPlayerId)) {
+    let skipped = 0
+    while (skipped < activePlayers.length && !hasLegalMove(this.state, this.state.currentPlayerId)) {
       skipped++
       this.advanceTurn(this.state.currentPlayerId)
     }
 
-    if (skipped >= totalPlayers) {
-      const winner = determineWinnerByScore(this.state)
+    if (skipped >= activePlayers.length) {
+      // Only active (non-forfeited) players are eligible to win
+      const filteredState = { ...this.state, playerOrder: activePlayers }
+      const winner = determineWinnerByScore(filteredState)
       this.finishGame(winner, 'no_moves')
     }
   }
@@ -438,7 +491,7 @@ export class GameRoom {
     }
   }
 
-  private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves'): void {
+  private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves' | 'forfeit'): void {
     this.clearTurnTimer()
     this.state = { ...this.state, status: 'finished', winner }
 

@@ -19,6 +19,7 @@ export type GameState = {
   firstTurnPlayersRemaining: string[]
   usedStartSymbols: string[]
   radius: number
+  forfeitedPlayerIds: string[]
 }
 
 export type LastMove = {
@@ -59,7 +60,7 @@ export type LobbyState = {
 export type GameResults = {
   winner: string | null
   scores: Record<string, Record<Color, number>>
-  reason: 'all_eighteen' | 'no_moves'
+  reason: 'all_eighteen' | 'no_moves' | 'forfeit'
 }
 
 export type ActiveGameSummary = {
@@ -78,6 +79,7 @@ export type ClientMessage =
   | { type: 'DECLINE_SWAP' }
   | { type: 'CHANGE_NAME'; name: string }
   | { type: 'REQUEST_SYNC' }
+  | { type: 'FORFEIT_GAME' }
   | { type: 'PING' }
 
 export type ServerMessage =
@@ -90,5 +92,6 @@ export type ServerMessage =
   | { type: 'INGENIOUS'; playerId: string; color: Color }
   | { type: 'YOUR_NEW_RACK'; rack: Tile[] }
   | { type: 'GAME_OVER'; results: GameResults }
+  | { type: 'PLAYER_FORFEITED'; playerId: string }
   | { type: 'ERROR'; code: string; message: string }
   | { type: 'PONG' }

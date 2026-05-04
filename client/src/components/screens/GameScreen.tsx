@@ -127,6 +127,14 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
     setPushLoading(false)
   }
 
+  const [showForfeitConfirm, setShowForfeitConfirm] = useState(false)
+
+  const handleForfeit = () => {
+    wsClient.send({ type: 'FORFEIT_GAME' })
+    setShowForfeitConfirm(false)
+    onNavigateHome()
+  }
+
   const handleTilePlaced = (tileIndex: number, hexA: AxialCoord, hexB: AxialCoord) => {
     const [a, b] = tileFlipped ? [hexB, hexA] : [hexA, hexB]
     wsClient.send({ type: 'PLACE_TILE', tileIndex, hexA: a, hexB: b })
@@ -213,6 +221,14 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
           >
             {colourBlindMode ? '◑ CBM' : '◑'}
           </button>
+          {/* Forfeit / Leave game */}
+          <button
+            onClick={() => setShowForfeitConfirm(true)}
+            title="Leave and forfeit this game"
+            className="text-xs px-2 py-0.5 rounded border border-red-900 text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
+          >
+            Leave
+          </button>
         </div>
       </div>
 
@@ -287,11 +303,40 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             playerNames={playerNames}
             currentPlayerId={gameState?.currentPlayerId ?? ''}
             flashColors={scoringAnimation?.flashColors}
+            forfeitedPlayerIds={gameState?.forfeitedPlayerIds ?? []}
           />
         </div>
       </div>
 
       {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
+
+      {/* Forfeit confirmation dialog */}
+      {showForfeitConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm border border-red-900 shadow-2xl">
+            <h2 className="text-xl font-bold text-red-400 mb-2">Leave &amp; Forfeit?</h2>
+            <p className="text-gray-300 text-sm mb-5">
+              {(gameState?.playerOrder.filter(p => !(gameState.forfeitedPlayerIds ?? []).includes(p)).length ?? 0) > 2
+                ? 'Your turns will be skipped for the rest of this game. The other players will keep playing.'
+                : 'The remaining player will win the game by forfeit.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowForfeitConfirm(false)}
+                className="flex-1 py-2 rounded-lg border border-gray-600 text-gray-300 hover:text-white transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForfeit}
+                className="flex-1 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white font-semibold transition-colors text-sm"
+              >
+                Forfeit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Fade-in/out notification: INGENIOUS! or Your Turn */}
       {(lastIngenious || showTurnNotification) && (

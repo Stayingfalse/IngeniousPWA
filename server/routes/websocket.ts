@@ -161,6 +161,22 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           break
         }
 
+        case 'FORFEIT_GAME': {
+          if (!playerId || !currentLobbyId) {
+            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            return
+          }
+
+          const lobby = lobbyManager.getLobby(currentLobbyId)
+          if (!lobby?.gameRoom) {
+            send({ type: 'ERROR', code: 'NO_GAME', message: 'No active game' })
+            return
+          }
+
+          lobby.gameRoom.handleForfeit(playerId)
+          break
+        }
+
         case 'CHANGE_NAME': {
           if (!playerId || !currentLobbyId) {
             send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
