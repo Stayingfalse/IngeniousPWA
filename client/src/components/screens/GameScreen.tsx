@@ -47,6 +47,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
   const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
   const usedStartSymbols = gameState?.usedStartSymbols ?? []
   const isAsyncMode = lobbyState?.turnMode === 'async'
+  const isVsAI = lobbyState?.players.some(p => p.isAI) ?? false
 
   // Show tutorial for first-time players
   const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('hasSeenTutorial'))
@@ -82,7 +83,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
 
   useEffect(() => {
-    if (!gameState?.turnDeadline || isAsyncMode) {
+    if (!gameState?.turnDeadline || isAsyncMode || showTutorial) {
       setSecondsLeft(null)
       return
     }
@@ -98,7 +99,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
     update()
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
-  }, [gameState?.turnDeadline, isAsyncMode])
+  }, [gameState?.turnDeadline, isAsyncMode, showTutorial])
 
   // Push notification opt-in (async mode)
   const [pushPermission, setPushPermission] = useState(getNotificationPermission)
@@ -154,7 +155,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
   )
 
   const timerColor = secondsLeft !== null && secondsLeft <= 10
-    ? 'text-red-400'
+    ? 'text-red-300 bg-red-900/60 animate-pulse rounded px-1.5 py-0.5'
     : secondsLeft !== null && secondsLeft <= 20
       ? 'text-yellow-400'
       : 'text-gray-400'
@@ -189,8 +190,8 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
           )}
           {/* Async mode badge */}
           {isAsyncMode && (
-            <span className="text-blue-400 text-xs" title="Turn-based game — no time limit">
-              ☁ Turn-based
+            <span className="text-blue-400 text-xs" title={isVsAI ? 'vs Computer — no time limit' : 'Turn-based game — no time limit'}>
+              {isVsAI ? '🤖 Computer' : '☁ Turn-based'}
             </span>
           )}
           {/* Push notification toggle (async only) */}

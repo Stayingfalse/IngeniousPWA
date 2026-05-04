@@ -87,20 +87,21 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const rawMode = body?.turnMode ?? 'realtime'
     const turnMode: TurnMode = rawMode === 'async' ? 'async' : 'realtime'
 
+    // vsAI games are always turn-based (async) with no timer so the player can
+    // drop in and out freely — identical to async games with human opponents.
+    const effectiveTurnMode: TurnMode = vsAI ? 'async' : turnMode
+
     let turnLimitSeconds: number | null
-    if (turnMode === 'async') {
+    if (effectiveTurnMode === 'async') {
       turnLimitSeconds = null
-    } else if (vsAI) {
-      // Use a 2-minute turn limit for vs-AI games to give the player enough time
-      turnLimitSeconds = 120
     } else {
       const requested = body?.turnLimitSeconds ?? 60
       turnLimitSeconds = VALID_TURN_LIMITS.has(requested) ? requested : 60
     }
 
-    const lobby = lobbyManager.createLobby(maxPlayers, turnMode, turnLimitSeconds, vsAI, aiDifficulty)
+    const lobby = lobbyManager.createLobby(maxPlayers, effectiveTurnMode, turnLimitSeconds, vsAI, aiDifficulty)
 
-    return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode, turnLimitSeconds })
+    return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode: effectiveTurnMode, turnLimitSeconds })
   })
 
   // Get lobby info (60 per minute per IP)
