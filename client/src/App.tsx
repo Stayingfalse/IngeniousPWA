@@ -10,11 +10,14 @@ import { wsClient } from './lib/wsClient'
 
 type Screen = 'home' | 'lobby' | 'game'
 
+/** How often (ms) to refresh the active-games list while on the home screen. */
+const ACTIVE_GAMES_POLL_INTERVAL_MS = 30_000
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const fetchActiveGames = useCallback(() => {
@@ -44,6 +47,15 @@ export default function App() {
         setErrorMessage('')
         // If a game is already in progress (mid-game reconnect), go straight to the game screen
         setScreen(msg.lobbyState.status === 'in_progress' ? 'game' : 'lobby')
+        break
+      }
+
+      case 'SPECTATING': {
+        // Non-participant viewing an in-progress game
+        startSpectating(msg.lobbyState)
+        setGameState(msg.state)
+        setErrorMessage('')
+        setScreen('game')
         break
       }
 
@@ -96,7 +108,7 @@ export default function App() {
           setErrorMessage('Lobby not found. It may have been closed.')
           localStorage.removeItem('lastLobbyId')
         } else if (msg.code === 'GAME_ALREADY_STARTED') {
-          setErrorMessage('This game has already started and you are not a player. Spectating is not yet available.')
+          setErrorMessage('This game has already ended or is no longer available to join.')
         } else {
           setErrorMessage(msg.message || 'An error occurred')
         }
@@ -105,6 +117,20 @@ export default function App() {
   }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver])
 
   const { connected } = useWebSocket(handleMessage, authReady)
+
+  // Capture ?join= URL param on first mount so we can auto-navigate once connected.
+  // We clear it from the URL immediately to prevent HomeScreen from also reading it.
+  const pendingJoinFromUrlRef = useRef<string | null>(null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const pendingLobbyId = params.get('join')
+    if (pendingLobbyId) {
+      pendingJoinFromUrlRef.current = pendingLobbyId.toUpperCase().trim()
+      const url = new URL(window.location.href)
+      url.searchParams.delete('join')
+      window.history.replaceState(null, '', url.toString())
+    }
+  }, [])
 
   // Ensure player_token cookie is established on mount so HTTP API calls succeed
   useEffect(() => {
@@ -123,6 +149,36 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Refresh active games list periodically while on the home screen so the
+  // "Games in Progress" list updates when it becomes the player's turn.
+  useEffect(() => {
+    if (screen !== 'home') return
+    const id = setInterval(fetchActiveGames, ACTIVE_GAMES_POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [screen, fetchActiveGames])
+
+  /** Enter a specific async game from the home screen game list. */
+  const handleEnterGame = useCallback((targetLobbyId: string) => {
+    useGameStore.getState().reset()
+    const savedName = localStorage.getItem('playerName')
+    const name = myPlayerName || savedName || 'Player'
+    wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
+  }, [myPlayerName])
+
+  // Listen for messages posted by the service worker (e.g. notification click on
+  // an existing window) and navigate straight to the referenced game.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const handler = (event: MessageEvent) => {
+      const data = event.data as { type?: string; lobbyId?: string } | null
+      if (data?.type === 'NAVIGATE_TO_GAME' && data.lobbyId) {
+        handleEnterGame(data.lobbyId)
+      }
+    }
+    navigator.serviceWorker.addEventListener('message', handler)
+    return () => navigator.serviceWorker.removeEventListener('message', handler)
+  }, [handleEnterGame])
+
   // Auto re-join lobby/game when WebSocket reconnects OR on initial mount if saved lobby exists
   const prevConnectedRef = useRef(false)
   const hasAttemptedAutoRejoin = useRef(false)
@@ -137,8 +193,11 @@ export default function App() {
       wsClient.send({ type: 'JOIN_LOBBY', lobbyId, playerName: name })
     } else if (nowConnected && !hasAttemptedAutoRejoin.current && screen === 'home') {
       hasAttemptedAutoRejoin.current = true
-      // First connect: only auto-join realtime games (async games are shown in the list)
-      const savedLobbyId = localStorage.getItem('lastLobbyId')
+      // Prefer a lobby ID from the notification/invite URL, then fall back to
+      // the saved realtime lobby ID.
+      const pendingLobbyId = pendingJoinFromUrlRef.current
+      pendingJoinFromUrlRef.current = null
+      const savedLobbyId = pendingLobbyId ?? localStorage.getItem('lastLobbyId')
       if (savedLobbyId) {
         const savedName = localStorage.getItem('playerName')
         const name = myPlayerName || savedName || 'Player'
@@ -148,23 +207,16 @@ export default function App() {
     prevConnectedRef.current = connected
   }, [connected, lobbyId, myPlayerName, screen])
 
-  /** Enter a specific async game from the home screen game list. */
-  const handleEnterGame = useCallback((targetLobbyId: string) => {
-    useGameStore.getState().reset()
-    const savedName = localStorage.getItem('playerName')
-    const name = myPlayerName || savedName || 'Player'
-    wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
-  }, [myPlayerName])
-
   const handleNavigateHome = () => {
-    const currentTurnMode = useLobbyStore.getState().lobbyState?.turnMode
+    const { lobbyState: currentLobbyState, isSpectating } = useLobbyStore.getState()
+    const currentTurnMode = currentLobbyState?.turnMode
     useGameStore.getState().reset()
-    if (currentTurnMode === 'async') {
+    if (!isSpectating && currentTurnMode === 'async') {
       // For async games, keep the lobby state (player is still in the game).
       // Just go back to home and refresh the active games list.
       fetchActiveGames()
     } else {
-      // For realtime games, fully reset and clear the saved lobby.
+      // For realtime games and spectators, fully reset and clear the saved lobby.
       useLobbyStore.getState().reset()
       localStorage.removeItem('lastLobbyId')
     }

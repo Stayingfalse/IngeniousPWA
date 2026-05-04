@@ -39,11 +39,11 @@ const TURN_ANIMATION_DURATION_MS = 2500
 
 export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => void }) {
   const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious, scoringAnimation } = useGameStore()
-  const { myPlayerId, lobbyState } = useLobbyStore()
+  const { myPlayerId, lobbyState, isSpectating } = useLobbyStore()
 
   const [colourBlindMode, toggleColourBlindMode] = useColourBlindMode()
 
-  const isMyTurn = gameState?.currentPlayerId === myPlayerId
+  const isMyTurn = !isSpectating && gameState?.currentPlayerId === myPlayerId
   const isFirstMove = myPlayerId ? (gameState?.firstTurnPlayersRemaining ?? []).includes(myPlayerId) : false
   const usedStartSymbols = gameState?.usedStartSymbols ?? []
   const isAsyncMode = lobbyState?.turnMode === 'async'
@@ -182,6 +182,12 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
           playerNames={playerNames}
         />
         <div className="flex items-center gap-3 text-xs text-gray-400">
+          {/* Spectator badge */}
+          {isSpectating && (
+            <span className="text-sky-400 font-medium flex items-center gap-1" title="You are watching this game as a spectator">
+              👁 Spectating
+            </span>
+          )}
           {/* Real-time countdown */}
           {secondsLeft !== null && !isAsyncMode && (
             <span className={`font-mono font-bold ${timerColor}`} title="Time left for this turn">
@@ -189,13 +195,13 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             </span>
           )}
           {/* Async mode badge */}
-          {isAsyncMode && (
+          {isAsyncMode && !isSpectating && (
             <span className="text-blue-400 text-xs" title={isVsAI ? 'vs Computer — no time limit' : 'Turn-based game — no time limit'}>
               {isVsAI ? '🤖 Computer' : '☁ Turn-based'}
             </span>
           )}
-          {/* Push notification toggle (async only) */}
-          {isAsyncMode && isPushSupported() && pushPermission !== 'denied' && (
+          {/* Push notification toggle (async only, players only) */}
+          {isAsyncMode && !isSpectating && isPushSupported() && pushPermission !== 'denied' && (
             <button
               onClick={pushSubscribed ? handleDisableNotifications : handleEnableNotifications}
               disabled={pushLoading}
@@ -222,19 +228,29 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
           >
             {colourBlindMode ? '◑ CBM' : '◑'}
           </button>
-          {/* Forfeit / Leave game */}
-          <button
-            onClick={() => setShowForfeitConfirm(true)}
-            title="Leave and forfeit this game"
-            className="text-xs px-2 py-0.5 rounded border border-red-900 text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
-          >
-            Leave
-          </button>
+          {/* Spectators get a plain Leave button; players get the forfeit-confirm flow */}
+          {isSpectating ? (
+            <button
+              onClick={onNavigateHome}
+              title="Stop spectating"
+              className="text-xs px-2 py-0.5 rounded border border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200 transition-colors"
+            >
+              Leave
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowForfeitConfirm(true)}
+              title="Leave and forfeit this game"
+              className="text-xs px-2 py-0.5 rounded border border-red-900 text-red-400 hover:border-red-500 hover:text-red-300 transition-colors"
+            >
+              Leave
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Rack swap eligibility prompt */}
-      {showSwapPrompt && (() => {
+      {/* Rack swap eligibility prompt — players only */}
+      {showSwapPrompt && !isSpectating && (() => {
         const scores = gameState?.scores[myPlayerId ?? '']
         const minColor = scores ? findMinColor(scores) : null
         return (
@@ -264,7 +280,8 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
       {/* Portrait mode: Board on top (full width), Scoreboard below, Rack at bottom */}
       {/* Landscape mode: Rack on left, Board in center (full height), Scoreboard on right */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col portrait:flex-col landscape:flex-row">
-        {/* Tile rack - bottom in portrait, left in landscape */}
+        {/* Tile rack — hidden for spectators */}
+        {!isSpectating && (
         <div className="order-3 portrait:order-3 landscape:order-1 portrait:shrink-0 bg-[#1a1833] border-t portrait:border-t landscape:border-t-0 landscape:border-r border-[#312e6b] portrait:p-2 landscape:p-2 landscape:w-32 landscape:flex landscape:items-center landscape:overflow-y-auto">
           <PlayerRack
             tiles={myRack}
@@ -275,6 +292,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             isMyTurn={isMyTurn}
           />
         </div>
+        )}
 
         {/* Board - takes maximum space */}
         <div className="order-1 portrait:order-1 landscape:order-2 flex-1 min-h-0 overflow-hidden flex items-center justify-center portrait:p-1 landscape:p-2">
@@ -311,8 +329,8 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
 
       {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
 
-      {/* Forfeit confirmation dialog */}
-      {showForfeitConfirm && (
+      {/* Forfeit confirmation dialog — players only */}
+      {showForfeitConfirm && !isSpectating && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm border border-red-900 shadow-2xl">
             <h2 className="text-xl font-bold text-red-400 mb-2">Leave &amp; Forfeit?</h2>

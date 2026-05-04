@@ -63,19 +63,30 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
 
   const targetUrl: string = (event.notification.data as { url?: string })?.url ?? '/'
 
+  // Extract the lobby ID from the ?join= query param so we can tell an
+  // already-open window to navigate directly to that game.
+  let lobbyId: string | null = null
+  try {
+    lobbyId = new URL(targetUrl, self.location.origin).searchParams.get('join')
+  } catch {
+    // ignore malformed URLs
+  }
+
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then(clientList => {
-        // Focus an existing window if available
+        // Focus an existing window and tell it to navigate to the game
         for (const client of clientList) {
           const clientUrl = new URL(client.url)
           if (clientUrl.origin === self.location.origin) {
-            void client.focus()
-            return
+            if (lobbyId) {
+              client.postMessage({ type: 'NAVIGATE_TO_GAME', lobbyId })
+            }
+            return client.focus()
           }
         }
-        // Otherwise open a new window
+        // No existing window — open a new one at the notification URL
         return self.clients.openWindow(targetUrl)
       }),
   )

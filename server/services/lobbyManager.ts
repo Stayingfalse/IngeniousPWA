@@ -110,7 +110,7 @@ export class LobbyManager {
     playerId: string,
     playerName: string,
     ws: WebSocket,
-  ): { lobby: Lobby; seat: number } | { error: string } {
+  ): { lobby: Lobby; seat: number } | { lobby: Lobby; isSpectator: true } | { error: string } {
     const lobby = this.getLobby(lobbyId)
     if (!lobby) {
       return { error: 'LOBBY_NOT_FOUND' }
@@ -119,6 +119,10 @@ export class LobbyManager {
       // Allow reconnect if player is already in lobby
       const existing = lobby.players.find(p => p.id === playerId)
       if (!existing) {
+        // Non-player visiting an in-progress game → admit as spectator
+        if (lobby.status === 'in_progress' && lobby.gameRoom) {
+          return { lobby, isSpectator: true }
+        }
         return { error: 'GAME_ALREADY_STARTED' }
       }
     }

@@ -37,6 +37,8 @@ export type MaskedGameState = Omit<GameState, 'tileBag' | 'playerRacks'> & {
   turnDeadline: number | null
   lastMove?: LastMove
   swapAvailable?: boolean
+  /** True when the receiving client is watching as a spectator, not a participant. */
+  isSpectator?: boolean
 }
 
 export type PlayerInfo = {
@@ -102,6 +104,7 @@ export type ClientMessage =
 
 export type ServerMessage =
   | { type: 'JOINED'; playerId: string; seat: number; lobbyState: LobbyState }
+  | { type: 'SPECTATING'; state: MaskedGameState; lobbyState: LobbyState }
   | { type: 'PLAYER_JOINED'; player: PlayerInfo }
   | { type: 'PLAYER_LEFT'; playerId: string }
   | { type: 'PLAYER_NAME_CHANGED'; playerId: string; name: string }
