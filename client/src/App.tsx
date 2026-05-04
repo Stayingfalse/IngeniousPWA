@@ -17,7 +17,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating, spectatorJoined, spectatorLeft, setOpenLobbies, openLobbies } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating, spectatorJoined, spectatorLeft, setOpenLobbies, openLobbies, updateLobbyState } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const fetchActiveGames = useCallback(() => {
@@ -118,6 +118,28 @@ export default function App() {
         spectatorLeft(msg.spectatorId)
         break
 
+      case 'LOBBY_STATE_UPDATED':
+        updateLobbyState(msg.lobbyState)
+        break
+
+      case 'PLAYER_KICKED':
+        // This player has been removed from the lobby/game by the host
+        useGameStore.getState().reset()
+        useLobbyStore.getState().reset()
+        localStorage.removeItem('lastLobbyId')
+        setErrorMessage('You have been removed from the lobby by the host.')
+        setScreen('home')
+        break
+
+      case 'LOBBY_CLOSED':
+        // The host deleted the lobby
+        useGameStore.getState().reset()
+        useLobbyStore.getState().reset()
+        localStorage.removeItem('lastLobbyId')
+        setErrorMessage('The lobby was closed by the host.')
+        setScreen('home')
+        break
+
       case 'ERROR':
         console.error('[WS Error]', msg.code, msg.message)
         // Display error to user based on error code
@@ -131,7 +153,7 @@ export default function App() {
         }
         break
     }
-  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver, spectatorJoined, spectatorLeft])
+  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver, spectatorJoined, spectatorLeft, updateLobbyState])
 
   const { connected } = useWebSocket(handleMessage, authReady)
 
@@ -194,7 +216,26 @@ export default function App() {
     wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
   }, [myPlayerName])
 
-  // Listen for messages posted by the service worker (e.g. notification click on
+  /** Delete an open (waiting) async lobby from the home screen. */
+  const handleDeleteOpenLobby = useCallback(async (targetLobbyId: string) => {
+    try {
+      const res = await fetch(`/api/lobbies/${targetLobbyId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (res.ok) {
+        // Refresh the open lobbies list
+        fetchOpenLobbies()
+      } else {
+        const data = await res.json() as { error?: string }
+        setErrorMessage(data.error || 'Failed to delete lobby')
+      }
+    } catch {
+      setErrorMessage('Network error')
+    }
+  }, [fetchOpenLobbies])
+
+  // Listen for messages posted by the service worker
   // an existing window) and navigate straight to the referenced game.
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
@@ -272,6 +313,7 @@ export default function App() {
           openLobbies={openLobbies}
           onEnterGame={handleEnterGame}
           onEnterOpenLobby={handleEnterOpenLobby}
+          onDeleteOpenLobby={handleDeleteOpenLobby}
           playerId={myPlayerId}
         />
       )}

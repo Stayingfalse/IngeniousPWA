@@ -15,6 +15,8 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [nameError, setNameError] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const isHost = lobbyState?.hostId === myPlayerId
   const canStart = isHost && (lobbyState?.players.length ?? 0) >= 2
@@ -26,6 +28,34 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
 
   const handleLeave = () => {
     onNavigate('home')
+  }
+
+  const handleDeleteLobby = async () => {
+    if (!lobbyId) return
+    setDeleteError('')
+    try {
+      const res = await fetch(`/api/lobbies/${lobbyId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (res.ok) {
+        onNavigate('home')
+      } else {
+        const data = await res.json() as { error?: string }
+        setDeleteError(data.error || 'Failed to delete lobby')
+      }
+    } catch {
+      setDeleteError('Network error — please try again')
+    }
+    setDeleteConfirm(false)
+  }
+
+  const handleToggleAutoStart = () => {
+    wsClient.send({ type: 'SET_AUTO_START', enabled: !(lobbyState?.autoStart ?? false) })
+  }
+
+  const handleKickPlayer = (targetPlayerId: string) => {
+    wsClient.send({ type: 'KICK_PLAYER', targetPlayerId })
   }
 
   const handleCopyCode = async () => {
@@ -192,6 +222,18 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
               {player.id === myPlayerId && !editingName && (
                 <span className="text-xs text-purple-400">You</span>
               )}
+              {/* Kick button — host only, not for self or AI */}
+              {isHost && player.id !== myPlayerId && !player.isAI && (
+                <button
+                  onClick={() => handleKickPlayer(player.id)}
+                  title={`Remove ${player.name}`}
+                  className="text-gray-600 hover:text-red-400 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
           ))}
 
@@ -210,6 +252,19 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
         </div>
 
         {nameError && <p className="text-red-400 text-xs mb-3">{nameError}</p>}
+
+        {/* Auto-start toggle — host only, async waiting lobbies */}
+        {isHost && isAsyncWaiting && (
+          <label className="flex items-center gap-2 cursor-pointer select-none mb-4">
+            <input
+              type="checkbox"
+              className="w-4 h-4 accent-purple-500 cursor-pointer"
+              checked={lobbyState?.autoStart ?? false}
+              onChange={handleToggleAutoStart}
+            />
+            <span className="text-sm text-gray-300">Auto-start when lobby is full</span>
+          </label>
+        )}
 
         <div className="space-y-2">
           {isHost && (
@@ -238,8 +293,46 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
           >
             {isAsyncWaiting ? 'Return to Home (lobby stays open)' : 'Leave'}
           </button>
+          {/* Delete lobby — host only, waiting lobbies */}
+          {isHost && lobbyState?.status === 'waiting' && (
+            <>
+              {deleteError && <p className="text-red-400 text-xs text-center">{deleteError}</p>}
+              <button
+                className="w-full py-2 rounded-lg text-red-500 hover:text-red-400 transition-colors text-sm"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                Delete Lobby
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm border border-red-900 shadow-2xl">
+            <h2 className="text-xl font-bold text-red-400 mb-2">Delete Lobby?</h2>
+            <p className="text-gray-300 text-sm mb-5">
+              This will close the lobby and remove all waiting players. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                className="flex-1 py-2 rounded-lg border border-gray-600 text-gray-300 hover:text-white transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleDeleteLobby()}
+                className="flex-1 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white font-semibold transition-colors text-sm"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

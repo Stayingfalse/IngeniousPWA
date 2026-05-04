@@ -108,6 +108,25 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode: effectiveTurnMode, turnLimitSeconds, autoStart })
   })
 
+  // Delete a waiting lobby (host only, 10 per minute per IP)
+  fastify.delete('/api/lobbies/:id', {
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const { id } = request.params as { id: string }
+    const result = lobbyManager.deleteLobby(id.toUpperCase(), player.id)
+    if (result.error) {
+      const status = result.error === 'LOBBY_NOT_FOUND' ? 404 : result.error === 'NOT_HOST' ? 403 : 400
+      return reply.status(status).send({ error: result.error })
+    }
+    return reply.send({ ok: true })
+  })
+
   // Get lobby info (60 per minute per IP)
   fastify.get('/api/lobbies/:id', {
     config: { rateLimit: { max: 60, timeWindow: '1 minute' } },

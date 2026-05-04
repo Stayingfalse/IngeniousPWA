@@ -114,6 +114,8 @@ export type ClientMessage =
   | { type: 'CHANGE_NAME'; name: string }
   | { type: 'REQUEST_SYNC' }
   | { type: 'FORFEIT_GAME' }
+  | { type: 'SET_AUTO_START'; enabled: boolean }
+  | { type: 'KICK_PLAYER'; targetPlayerId: string }
   | { type: 'PING' }
 
 export type ServerMessage =
@@ -130,5 +132,8 @@ export type ServerMessage =
   | { type: 'PLAYER_FORFEITED'; playerId: string }
   | { type: 'SPECTATOR_JOINED'; spectator: SpectatorInfo }
   | { type: 'SPECTATOR_LEFT'; spectatorId: string }
+  | { type: 'LOBBY_STATE_UPDATED'; lobbyState: LobbyState }
+  | { type: 'PLAYER_KICKED' }
+  | { type: 'LOBBY_CLOSED' }
   | { type: 'ERROR'; code: string; message: string }
   | { type: 'PONG' }

@@ -5,9 +5,10 @@ const STORAGE_KEY = 'colourBlindMode'
 export function useColourBlindMode(): [boolean, () => void] {
   const [enabled, setEnabled] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === 'true'
+      // Default to ON; only treat the setting as off when explicitly set to 'false'
+      return localStorage.getItem(STORAGE_KEY) !== 'false'
     } catch {
-      return false
+      return true
     }
   })
 

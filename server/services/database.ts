@@ -177,6 +177,8 @@ export const lobbyQueries = {
   updateStatus: db.prepare('UPDATE lobbies SET status = ? WHERE id = ?'),
   setStarted: db.prepare('UPDATE lobbies SET status = ?, started_at = unixepoch() WHERE id = ?'),
   setFinished: db.prepare('UPDATE lobbies SET status = ?, finished_at = unixepoch() WHERE id = ?'),
+  updateAutoStart: db.prepare('UPDATE lobbies SET auto_start = ? WHERE id = ?'),
+  delete: db.prepare('DELETE FROM lobbies WHERE id = ?'),
   findWaitingAsync: db.prepare<[], LobbyRow>("SELECT * FROM lobbies WHERE status = 'waiting' AND turn_mode = 'async'"),
 }
 
@@ -184,6 +186,7 @@ export const lobbyPlayerQueries = {
   findByLobby: db.prepare<[string], LobbyPlayerRow>('SELECT * FROM lobby_players WHERE lobby_id = ? ORDER BY seat_index'),
   insert: db.prepare('INSERT INTO lobby_players (lobby_id, player_id, seat_index) VALUES (?, ?, ?)'),
   delete: db.prepare('DELETE FROM lobby_players WHERE lobby_id = ? AND player_id = ?'),
+  deleteByLobby: db.prepare('DELETE FROM lobby_players WHERE lobby_id = ?'),
   count: db.prepare<[string], { count: number }>('SELECT COUNT(*) as count FROM lobby_players WHERE lobby_id = ?'),
 }
 

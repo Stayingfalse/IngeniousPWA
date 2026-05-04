@@ -19,6 +19,7 @@ export default function HomeScreen({
   openLobbies = [],
   onEnterGame,
   onEnterOpenLobby,
+  onDeleteOpenLobby,
   playerId,
 }: {
   globalError?: string
@@ -26,6 +27,7 @@ export default function HomeScreen({
   openLobbies?: OpenLobbySummary[]
   onEnterGame?: (lobbyId: string) => void
   onEnterOpenLobby?: (lobbyId: string) => void
+  onDeleteOpenLobby?: (lobbyId: string) => void
   playerId?: string | null
 }) {
   const { myPlayerName } = useLobbyStore()
@@ -166,38 +168,52 @@ export default function HomeScreen({
             Open Lobbies
           </h2>
           <div className="space-y-2">
-            {openLobbies.map(lobby => (
-              <div
-                key={lobby.lobbyId}
-                className="bg-[#1a1833] rounded-xl px-4 py-3 border border-blue-600/40 flex items-center gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-mono text-xs text-gray-500">{lobby.lobbyId}</span>
-                    <span className="text-xs bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
-                      ☁ Waiting
-                    </span>
-                    {lobby.autoStart && (
-                      <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded-full font-medium">
-                        ⚡ Auto-start
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-sm text-white truncate">
-                    {lobby.players.map(p => p.name).join(', ')}
-                    <span className="text-gray-500 ml-1">
-                      ({lobby.players.length}/{lobby.maxPlayers})
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onEnterOpenLobby?.(lobby.lobbyId)}
-                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+            {openLobbies.map(lobby => {
+              const isLobbyHost = lobby.players[0]?.id === playerId
+              return (
+                <div
+                  key={lobby.lobbyId}
+                  className="bg-[#1a1833] rounded-xl px-4 py-3 border border-blue-600/40 flex items-center gap-3"
                 >
-                  Enter
-                </button>
-              </div>
-            ))}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-mono text-xs text-gray-500">{lobby.lobbyId}</span>
+                      <span className="text-xs bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
+                        ☁ Waiting
+                      </span>
+                      {lobby.autoStart && (
+                        <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded-full font-medium">
+                          ⚡ Auto-start
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-white truncate">
+                      {lobby.players.map(p => p.name).join(', ')}
+                      <span className="text-gray-500 ml-1">
+                        ({lobby.players.length}/{lobby.maxPlayers})
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onEnterOpenLobby?.(lobby.lobbyId)}
+                    className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Enter
+                  </button>
+                  {isLobbyHost && onDeleteOpenLobby && (
+                    <button
+                      onClick={() => onDeleteOpenLobby(lobby.lobbyId)}
+                      title="Delete lobby"
+                      className="shrink-0 text-gray-500 hover:text-red-400 transition-colors p-1"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
