@@ -37,6 +37,7 @@ export default defineConfig({
         background_color: '#062f38',
         display: 'standalone',
         display_override: ['standalone', 'minimal-ui'],
+        handle_links: 'preferred',
         orientation: 'any',
         icons: [
           {

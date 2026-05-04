@@ -3,6 +3,7 @@ import { wsClient } from '../../lib/wsClient'
 import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
 import HowToPlayModal from '../ui/HowToPlayModal'
+import StatsPanel from '../ui/StatsPanel'
 import type { TurnMode, ActiveGameSummary } from '@ingenious/shared'
 
 const TIMER_PRESETS: { label: string; seconds: number }[] = [
@@ -16,10 +17,12 @@ export default function HomeScreen({
   globalError,
   activeGames = [],
   onEnterGame,
+  playerId,
 }: {
   globalError?: string
   activeGames?: ActiveGameSummary[]
   onEnterGame?: (lobbyId: string) => void
+  playerId?: string | null
 }) {
   const { myPlayerName } = useLobbyStore()
   const [playerName, setPlayerName] = useState('')
@@ -119,6 +122,8 @@ export default function HomeScreen({
       {showHowToPlay && <HowToPlayModal onClose={() => setShowHowToPlay(false)} />}
 
       <IngeniousBanner />
+
+      <StatsPanel playerId={playerId ?? null} />
 
       {/* Active turn-based games — shown above the join/create form */}
       {activeGames.length > 0 && (
