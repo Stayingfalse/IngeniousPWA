@@ -249,32 +249,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
         </div>
       </div>
 
-      {/* Rack swap eligibility prompt — players only */}
-      {showSwapPrompt && !isSpectating && (() => {
-        const scores = gameState?.scores[myPlayerId ?? '']
-        const minColor = scores ? findMinColor(scores) : null
-        return (
-          <div className="bg-amber-900/80 border-b border-amber-600 px-4 py-2 flex items-center justify-between gap-3 text-sm">
-            <span className="text-amber-200">
-              Your rack has no <strong>{minColor ? COLOR_LABELS[minColor] : ''}</strong> tiles (your lowest colour). You may swap your rack.
-            </span>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={handleSwapRack}
-                className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs font-medium"
-              >
-                Swap Rack
-              </button>
-              <button
-                onClick={handleDeclineSwap}
-                className="text-amber-300 hover:text-white px-2 py-1 text-xs"
-              >
-                Keep & Play
-              </button>
-            </div>
-          </div>
-        )
-      })()}
+
 
       {/* Main content - responsive layout based on orientation */}
       {/* Portrait mode: Board on top (full width), Scoreboard below, Rack at bottom */}
@@ -289,7 +264,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             tileFlipped={tileFlipped}
             onSelect={selectTile}
             onFlip={flipTile}
-            isMyTurn={isMyTurn}
+            isMyTurn={isMyTurn && !showSwapPrompt}
           />
         </div>
         )}
@@ -302,7 +277,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             myRack={myRack}
             selectedTileIndex={selectedTileIndex}
             tileFlipped={tileFlipped}
-            isMyTurn={isMyTurn}
+            isMyTurn={isMyTurn && !showSwapPrompt}
             isFirstMove={isFirstMove}
             usedStartSymbols={usedStartSymbols}
             onTilePlaced={handleTilePlaced}
@@ -328,6 +303,36 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
       </div>
 
       {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
+
+      {/* Rack swap modal — shown at end of turn when swap is available */}
+      {showSwapPrompt && !isSpectating && (() => {
+        const scores = gameState?.scores[myPlayerId ?? '']
+        const minColor = scores ? findMinColor(scores) : null
+        return (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm border border-amber-700 shadow-2xl">
+              <h2 className="text-xl font-bold text-amber-400 mb-3">Swap Your Rack?</h2>
+              <p className="text-gray-300 text-sm mb-5">
+                Your rack has no <strong className="text-amber-300">{minColor ? COLOR_LABELS[minColor] : ''}</strong> tiles — your lowest colour. You may swap your entire rack for new tiles.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDeclineSwap}
+                  className="flex-1 py-2 rounded-lg border border-gray-600 text-gray-300 hover:text-white transition-colors text-sm"
+                >
+                  Keep Rack
+                </button>
+                <button
+                  onClick={handleSwapRack}
+                  className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-colors text-sm"
+                >
+                  Swap Rack
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Forfeit confirmation dialog — players only */}
       {showForfeitConfirm && !isSpectating && (
