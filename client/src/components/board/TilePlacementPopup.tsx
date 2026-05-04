@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { HEX_SIZE } from './hexUtils'
 
+/** Standard mobile breakpoint in px — matches Tailwind's `sm:` breakpoint. */
+const MOBILE_BREAKPOINT_PX = 640
+
 interface TilePlacementPopupProps {
   hexAPos: { x: number; y: number }
   hexBPos: { x: number; y: number }
@@ -24,7 +27,7 @@ export default function TilePlacementPopup({
   // Scale up buttons on small screens for easier touch targets (memoised — viewport
   // size doesn't change during a single placement interaction)
   const scale = useMemo(() => {
-    return typeof window !== 'undefined' && window.innerWidth < 640 ? 1.35 : 1.0
+    return typeof window !== 'undefined' && window.innerWidth < MOBILE_BREAKPOINT_PX ? 1.35 : 1.0
   }, [])
 
   const BTN_GAP = 38 * scale
