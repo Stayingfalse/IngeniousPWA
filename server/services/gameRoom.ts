@@ -30,6 +30,7 @@ import { AI_PLAYER_ID, chooseBestMove } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
 import { notifyPlayerTurnIfOffline } from './pushNotifications'
 import { wsError } from '../lib/errors'
+import { createTurnTimer } from './turnTimer'
 
 export interface GameRoomSnapshot {
   state: GameState
@@ -45,7 +46,7 @@ export class GameRoom {
   private startedAt: number = Date.now()
   private lobbyId: string
   private turnLimitMs: number | null
-  private turnTimer: ReturnType<typeof setTimeout> | null = null
+  private turnTimer = createTurnTimer()
   private turnDeadline: number | null = null
   // Player display names for push notification messages
   private playerNames: Map<string, string> = new Map()
@@ -105,7 +106,7 @@ export class GameRoom {
     room.playerNames = new Map(Object.entries(data.playerNames))
     room.pendingLastMove = undefined
     room.pendingSwapPlayerId = data.pendingSwapPlayerId
-    room.turnTimer = null
+    room.turnTimer = createTurnTimer()
     room.turnDeadline = null
     room.onAfterMove = null
     room.aiPlayerIds = new Set(data.state.playerOrder.filter(id => id === AI_PLAYER_ID))
@@ -497,23 +498,21 @@ export class GameRoom {
     this.handlePlaceTile(playerId, move.tileIndex, move.hexA, move.hexB)
   }
 
-  private startTurnTimer(): void {    this.clearTurnTimer()
+  private startTurnTimer(): void {
+    this.clearTurnTimer()
     if (this.turnLimitMs === null) {
       // Async / turn-based mode — no timer
       this.turnDeadline = null
       return
     }
-    this.turnDeadline = Date.now() + this.turnLimitMs
-    this.turnTimer = setTimeout(() => {
-      this.handleTurnTimeout()
-    }, this.turnLimitMs)
+    this.turnDeadline = this.turnTimer.start({
+      turnLimitMs: this.turnLimitMs,
+      onTimeout: () => this.handleTurnTimeout(),
+    })
   }
 
   private clearTurnTimer(): void {
-    if (this.turnTimer !== null) {
-      clearTimeout(this.turnTimer)
-      this.turnTimer = null
-    }
+    this.turnTimer.clear()
     this.turnDeadline = null
   }
 
