@@ -25,6 +25,7 @@ import {
   minScore,
 } from '@ingenious/shared'
 import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys, snapshotQueries } from './database'
+import { AI_PLAYER_ID, chooseBestMove } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
 
 // Lazy-load web-push to avoid crashing if not installed
@@ -75,15 +76,19 @@ export class GameRoom {
   private pendingSwapPlayerId: string | null = null
   // Optional callback invoked after each state-changing move (used for snapshots)
   onAfterMove: (() => void) | null = null
+  // Set of player IDs that are AI-controlled
+  private aiPlayerIds: Set<string> = new Set()
 
   constructor(
     lobbyId: string,
     playerIds: string[],
     playerNames: Record<string, string>,
     turnLimitMs: number | null,
+    aiPlayerIds?: Set<string>,
   ) {
     this.lobbyId = lobbyId
     this.turnLimitMs = turnLimitMs
+    this.aiPlayerIds = aiPlayerIds ?? new Set()
     for (const [id, name] of Object.entries(playerNames)) {
       this.playerNames.set(id, name)
     }
@@ -119,6 +124,7 @@ export class GameRoom {
     room.turnTimer = null
     room.turnDeadline = null
     room.onAfterMove = null
+    room.aiPlayerIds = new Set(data.state.playerOrder.filter(id => id === AI_PLAYER_ID))
     if (data.state.status === 'in_progress') {
       room.startTurnTimer()
     }
@@ -166,6 +172,12 @@ export class GameRoom {
       const masked = maskGameState(this.state, playerId, this.turnDeadline, lastMove, swapAvailable)
       this.send(playerId, { type: 'STATE_UPDATE', state: masked })
     }
+    this.maybeScheduleAiMove()
+  }
+
+  /** Called by LobbyManager after the game starts to trigger the first AI move if needed. */
+  scheduleAiMoveIfNeeded(): void {
+    this.maybeScheduleAiMove()
   }
 
   getMaskedState(playerId: string): MaskedGameState {
@@ -429,8 +441,38 @@ export class GameRoom {
     }
   }
 
-  private startTurnTimer(): void {
-    this.clearTurnTimer()
+  private maybeScheduleAiMove(): void {
+    if (this.state.status !== 'in_progress') return
+    const currentPlayer = this.state.currentPlayerId
+    if (!this.aiPlayerIds.has(currentPlayer)) return
+
+    const delay = 600 // ms — brief pause so the player sees the board update first
+
+    if (this.pendingSwapPlayerId === currentPlayer) {
+      // AI always declines the rack swap option
+      setTimeout(() => {
+        if (this.state.status === 'in_progress' && this.pendingSwapPlayerId === currentPlayer) {
+          this.handleDeclineSwap(currentPlayer)
+        }
+      }, delay)
+    } else {
+      setTimeout(() => {
+        if (this.state.status === 'in_progress' && this.state.currentPlayerId === currentPlayer) {
+          this.handleAiMove()
+        }
+      }, delay)
+    }
+  }
+
+  private handleAiMove(): void {
+    const playerId = this.state.currentPlayerId
+    if (!this.aiPlayerIds.has(playerId)) return
+    const move = chooseBestMove(this.state, playerId)
+    if (!move) return // checkForNoMoves should have ended the game already
+    this.handlePlaceTile(playerId, move.tileIndex, move.hexA, move.hexB)
+  }
+
+  private startTurnTimer(): void {    this.clearTurnTimer()
     if (this.turnLimitMs === null) {
       // Async / turn-based mode — no timer
       this.turnDeadline = null

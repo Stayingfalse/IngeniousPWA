@@ -73,8 +73,10 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       maxPlayers?: number
       turnMode?: string
       turnLimitSeconds?: number | null
+      vsAI?: boolean
     }
-    const maxPlayers = Math.min(4, Math.max(2, body?.maxPlayers ?? 2))
+    const vsAI = body?.vsAI === true
+    const maxPlayers = vsAI ? 2 : Math.min(4, Math.max(2, body?.maxPlayers ?? 2))
 
     const rawMode = body?.turnMode ?? 'realtime'
     const turnMode: TurnMode = rawMode === 'async' ? 'async' : 'realtime'
@@ -82,12 +84,15 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     let turnLimitSeconds: number | null
     if (turnMode === 'async') {
       turnLimitSeconds = null
+    } else if (vsAI) {
+      // Use a 2-minute turn limit for vs-AI games to give the player enough time
+      turnLimitSeconds = 120
     } else {
       const requested = body?.turnLimitSeconds ?? 60
       turnLimitSeconds = VALID_TURN_LIMITS.has(requested) ? requested : 60
     }
 
-    const lobby = lobbyManager.createLobby(maxPlayers, turnMode, turnLimitSeconds)
+    const lobby = lobbyManager.createLobby(maxPlayers, turnMode, turnLimitSeconds, vsAI)
 
     return reply.send({ lobbyId: lobby.id, maxPlayers: lobby.maxPlayers, turnMode, turnLimitSeconds })
   })

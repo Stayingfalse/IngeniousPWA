@@ -43,6 +43,7 @@ export type PlayerInfo = {
   id: string
   name: string
   seat: number
+  isAI?: boolean
 }
 
 export type TurnMode = 'realtime' | 'async'

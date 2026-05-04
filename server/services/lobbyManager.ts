@@ -3,12 +3,14 @@ import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, GameState } from 
 import { GameRoom } from './gameRoom'
 import type { GameRoomSnapshot } from './gameRoom'
 import { lobbyQueries, lobbyPlayerQueries, snapshotQueries, playerQueries } from './database'
+import { AI_PLAYER_ID, AI_PLAYER_NAME } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
 
 export interface LobbyPlayer {
   id: string
   name: string
   seat: number
+  isAI?: boolean
 }
 
 export class Lobby {
@@ -22,6 +24,7 @@ export class Lobby {
   createdAt: number = Date.now()
   turnMode: TurnMode
   turnLimitSeconds: number | null
+  vsAI: boolean = false
 
   constructor(id: string, maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null) {
     this.id = id
@@ -34,7 +37,7 @@ export class Lobby {
     return {
       id: this.id,
       status: this.status,
-      players: this.players.map(p => ({ id: p.id, name: p.name, seat: p.seat })),
+      players: this.players.map(p => ({ id: p.id, name: p.name, seat: p.seat, isAI: p.isAI })),
       maxPlayers: this.maxPlayers,
       hostId: this.hostId ?? '',
       turnMode: this.turnMode,
@@ -81,9 +84,10 @@ export class LobbyManager {
     setInterval(() => this.flushAllSnapshots(), 60 * 1000)
   }
 
-  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null): Lobby {
+  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null, vsAI = false): Lobby {
     const id = this.generateLobbyCode()
     const lobby = new Lobby(id, maxPlayers, turnMode, turnLimitSeconds)
+    lobby.vsAI = vsAI
     this.lobbies.set(id, lobby)
 
     try {
@@ -142,6 +146,17 @@ export class LobbyManager {
       // Non-critical
     }
 
+    // For vsAI lobbies, auto-add the computer player after the human joins
+    if (lobby.vsAI && !lobby.players.some(p => p.id === AI_PLAYER_ID)) {
+      const aiSeat = lobby.players.length
+      lobby.players.push({ id: AI_PLAYER_ID, name: AI_PLAYER_NAME, seat: aiSeat, isAI: true })
+      try {
+        lobbyPlayerQueries.insert.run(lobbyId, AI_PLAYER_ID, aiSeat)
+      } catch {
+        // Non-critical
+      }
+    }
+
     return { lobby, seat }
   }
 
@@ -159,13 +174,14 @@ export class LobbyManager {
     }
 
     const turnLimitMs = lobby.turnLimitSeconds !== null ? lobby.turnLimitSeconds * 1000 : null
-    const gameRoom = new GameRoom(lobbyId, playerIds, playerNames, turnLimitMs)
+    const aiPlayerIds = new Set(lobby.players.filter(p => p.isAI).map(p => p.id))
+    const gameRoom = new GameRoom(lobbyId, playerIds, playerNames, turnLimitMs, aiPlayerIds)
     gameRoom.onAfterMove = () => this.saveSnapshot(lobbyId)
 
     lobby.gameRoom = gameRoom
     lobby.status = 'in_progress'
 
-    // Register connections with game room
+    // Register connections with game room (AI players have no WebSocket)
     for (const player of lobby.players) {
       const ws = lobby.connections.get(player.id)
       if (ws) {
@@ -179,11 +195,14 @@ export class LobbyManager {
       // Non-critical
     }
 
-    // Send game started to each player with their masked state
+    // Send game started to each human player with their masked state
     for (const player of lobby.players) {
       const masked = gameRoom.getMaskedState(player.id)
       lobby.send(player.id, { type: 'GAME_STARTED', state: masked })
     }
+
+    // If the first player is AI, schedule the opening move
+    gameRoom.scheduleAiMoveIfNeeded()
 
     return {}
   }
@@ -277,7 +296,7 @@ export class LobbyManager {
               meta.playerNames[lp.player_id] ||
               `Player_${lp.player_id.slice(0, 6)}`
             playerNames[lp.player_id] = name
-            players.push({ id: lp.player_id, seat: lp.seat_index, name })
+            players.push({ id: lp.player_id, seat: lp.seat_index, name, isAI: lp.player_id === AI_PLAYER_ID })
           }
 
           const turnMode = ((lobbyRow.turn_mode as TurnMode | null) || 'realtime') as TurnMode
@@ -289,6 +308,7 @@ export class LobbyManager {
           lobby.hostId = players[0]?.id ?? null
           // Preserve original creation time (DB stores unix seconds)
           lobby.createdAt = (lobbyRow.created_at || Math.floor(Date.now() / 1000)) * 1000
+          lobby.vsAI = players.some(p => p.id === AI_PLAYER_ID)
 
           const gameRoom = GameRoom.fromSnapshot(snap.lobby_id, {
             state,
@@ -300,6 +320,8 @@ export class LobbyManager {
 
           lobby.gameRoom = gameRoom
           this.lobbies.set(snap.lobby_id, lobby)
+          // Re-schedule AI move if it was AI's turn when the server restarted
+          gameRoom.scheduleAiMoveIfNeeded()
           restored++
         } catch (err) {
           console.error(`[LobbyManager] Failed to restore snapshot for ${snap.lobby_id}:`, err)
