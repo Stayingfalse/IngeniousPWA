@@ -256,7 +256,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
       }
     })
 
-    socket.on('close', () => {
+    const handleDisconnect = () => {
       if (playerId && currentLobbyId) {
         if (isSpectatorConnection) {
           const lobby = lobbyManager.getLobby(currentLobbyId)
@@ -272,24 +272,10 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           lobbyManager.playerDisconnected(currentLobbyId, playerId)
         }
       }
-    })
+    }
 
-    socket.on('error', () => {
-      if (playerId && currentLobbyId) {
-        if (isSpectatorConnection) {
-          const lobby = lobbyManager.getLobby(currentLobbyId)
-          if (lobby) {
-            lobby.spectators = lobby.spectators.filter(s => s.id !== playerId)
-            lobby.gameRoom?.removeSpectatorConnection(playerId)
-            if (lobby.gameRoom) {
-              lobby.gameRoom.broadcast({ type: 'SPECTATOR_LEFT', spectatorId: playerId })
-            }
-          }
-        } else {
-          lobbyManager.playerDisconnected(currentLobbyId, playerId)
-        }
-      }
-    })
+    socket.on('close', handleDisconnect)
+    socket.on('error', handleDisconnect)
   })
 }
 

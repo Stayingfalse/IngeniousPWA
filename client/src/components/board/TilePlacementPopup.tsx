@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { HEX_SIZE } from './hexUtils'
 
 interface TilePlacementPopupProps {
@@ -20,9 +21,11 @@ export default function TilePlacementPopup({
   onConfirm,
   onCancel,
 }: TilePlacementPopupProps) {
-  // Scale up buttons on small screens for easier touch targets
-  const isSmallScreen = typeof window !== 'undefined' && window.innerWidth < 640
-  const scale = isSmallScreen ? 1.35 : 1.0
+  // Scale up buttons on small screens for easier touch targets (memoised — viewport
+  // size doesn't change during a single placement interaction)
+  const scale = useMemo(() => {
+    return typeof window !== 'undefined' && window.innerWidth < 640 ? 1.35 : 1.0
+  }, [])
 
   const BTN_GAP = 38 * scale
   const BTN_R = 14 * scale
