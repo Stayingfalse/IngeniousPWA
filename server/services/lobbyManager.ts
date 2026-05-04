@@ -5,6 +5,8 @@ import type { GameRoomSnapshot } from './gameRoom'
 import { lobbyQueries, lobbyPlayerQueries, snapshotQueries, playerQueries } from './database'
 import { AI_PLAYER_ID, AI_PLAYER_NAME } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
+import { shouldRemoveLobby } from './lobbyCleanup'
+import { restoreInProgressLobbiesFromDatabase, restoreWaitingAsyncLobbiesFromDatabase } from './lobbyRestore'
 
 export interface LobbyPlayer {
   id: string
@@ -80,6 +82,10 @@ export class Lobby {
 
 export class LobbyManager {
   private lobbies: Map<string, Lobby> = new Map()
+
+  private createRestoredLobby(id: string, maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null): Lobby {
+    return new Lobby(id, maxPlayers, turnMode, turnLimitSeconds)
+  }
 
   constructor() {
     this.restoreFromDatabase()
@@ -356,69 +362,17 @@ export class LobbyManager {
    */
   private restoreFromDatabase(): void {
     try {
-      const snapshots = snapshotQueries.findAll.all()
-      let restored = 0
+      const restoredLobbies = restoreInProgressLobbiesFromDatabase((id, maxPlayers, turnMode, turnLimitSeconds) =>
+        this.createRestoredLobby(id, maxPlayers, turnMode, turnLimitSeconds),
+      )
 
-      for (const snap of snapshots) {
-        try {
-          const state = JSON.parse(snap.state_json) as GameState
-          const meta = JSON.parse(snap.player_names_json) as {
-            playerNames: Record<string, string>
-            turnLimitMs: number | null
-            pendingSwapPlayerId: string | null
-          }
-
-          const lobbyRow = lobbyQueries.findById.get(snap.lobby_id)
-          if (!lobbyRow) continue
-
-          const dbPlayers = lobbyPlayerQueries.findByLobby.all(snap.lobby_id)
-          if (dbPlayers.length === 0) continue
-
-          // Build player list — prefer DB display names as the source of truth
-          const playerNames: Record<string, string> = { ...meta.playerNames }
-          const players: LobbyPlayer[] = []
-
-          for (const lp of dbPlayers) {
-            const playerRow = playerQueries.findById.get(lp.player_id)
-            const name =
-              playerRow?.display_name ||
-              meta.playerNames[lp.player_id] ||
-              `Player_${lp.player_id.slice(0, 6)}`
-            playerNames[lp.player_id] = name
-            players.push({ id: lp.player_id, seat: lp.seat_index, name, isAI: lp.player_id === AI_PLAYER_ID })
-          }
-
-          const turnMode = ((lobbyRow.turn_mode as TurnMode | null) || 'realtime') as TurnMode
-          const turnLimitSeconds = lobbyRow.turn_limit_seconds ?? null
-
-          const lobby = new Lobby(snap.lobby_id, lobbyRow.player_count, turnMode, turnLimitSeconds)
-          lobby.players = players
-          lobby.status = 'in_progress'
-          lobby.hostId = players[0]?.id ?? null
-          // Preserve original creation time (DB stores unix seconds)
-          lobby.createdAt = (lobbyRow.created_at || Math.floor(Date.now() / 1000)) * 1000
-          lobby.vsAI = players.some(p => p.id === AI_PLAYER_ID)
-
-          const gameRoom = GameRoom.fromSnapshot(snap.lobby_id, {
-            state,
-            playerNames,
-            turnLimitMs: meta.turnLimitMs,
-            pendingSwapPlayerId: meta.pendingSwapPlayerId,
-          })
-          gameRoom.onAfterMove = () => this.saveSnapshot(snap.lobby_id)
-
-          lobby.gameRoom = gameRoom
-          this.lobbies.set(snap.lobby_id, lobby)
-          // Re-schedule AI move if it was AI's turn when the server restarted
-          gameRoom.scheduleAiMoveIfNeeded()
-          restored++
-        } catch (err) {
-          console.error(`[LobbyManager] Failed to restore snapshot for ${snap.lobby_id}:`, err)
-        }
+      for (const lobby of restoredLobbies) {
+        lobby.gameRoom!.onAfterMove = () => this.saveSnapshot(lobby.id)
+        this.lobbies.set(lobby.id, lobby)
       }
 
-      if (restored > 0) {
-        console.log(`[LobbyManager] Restored ${restored} in-progress game(s) from database`)
+      if (restoredLobbies.length > 0) {
+        console.log(`[LobbyManager] Restored ${restoredLobbies.length} in-progress game(s) from database`)
       }
     } catch (err) {
       console.error('[LobbyManager] Failed to restore from database:', err)
@@ -436,28 +390,8 @@ export class LobbyManager {
 
   private cleanupLobbies(): void {
     const now = Date.now()
-    const ONE_HOUR = 60 * 60 * 1000
-    const ONE_DAY = 24 * ONE_HOUR
-    const SEVEN_DAYS = 7 * ONE_DAY
-    const THIRTY_DAYS = 30 * ONE_DAY
-
     for (const [id, lobby] of this.lobbies) {
-      const age = now - lobby.createdAt
-      const idle = lobby.connections.size === 0
-      const isAsync = lobby.turnMode === 'async'
-
-      const shouldRemove =
-        lobby.status === 'finished' ||
-        // async waiting lobbies persist for 7 days even when idle
-        (lobby.status === 'waiting' && isAsync && idle && age > SEVEN_DAYS) ||
-        // realtime waiting lobbies expire after 1 hour idle
-        (lobby.status === 'waiting' && !isAsync && idle && age > ONE_HOUR) ||
-        // async in-progress games can be idle for up to 30 days
-        (lobby.status === 'in_progress' && isAsync && idle && age > THIRTY_DAYS) ||
-        // realtime in-progress games expire after 24h idle
-        (lobby.status === 'in_progress' && !isAsync && idle && age > ONE_DAY)
-
-      if (shouldRemove) {
+      if (shouldRemoveLobby(lobby, now)) {
         this.lobbies.delete(id)
       }
     }
@@ -469,38 +403,19 @@ export class LobbyManager {
    */
   private restoreWaitingLobbies(): void {
     try {
-      const waitingRows = lobbyQueries.findWaitingAsync.all()
-      let restored = 0
+      const restoredLobbies = restoreWaitingAsyncLobbiesFromDatabase((id, maxPlayers, turnMode, turnLimitSeconds) =>
+        this.createRestoredLobby(id, maxPlayers, turnMode, turnLimitSeconds),
+      )
 
-      for (const row of waitingRows) {
-        // Skip if this lobby is already loaded in memory (e.g. from restoreFromDatabase)
-        if (this.lobbies.has(row.id)) continue
-
-        const dbPlayers = lobbyPlayerQueries.findByLobby.all(row.id)
-        if (dbPlayers.length === 0) continue
-
-        const turnMode: TurnMode = 'async'
-        const lobby = new Lobby(row.id, row.player_count, turnMode, row.turn_limit_seconds ?? null)
-        lobby.status = 'waiting'
-        lobby.autoStart = row.auto_start === 1
-        lobby.createdAt = (row.created_at || Math.floor(Date.now() / 1000)) * 1000
-
-        const players: LobbyPlayer[] = []
-        for (const lp of dbPlayers) {
-          const playerRow = playerQueries.findById.get(lp.player_id)
-          const name = playerRow?.display_name ?? `Player_${lp.player_id.slice(0, 6)}`
-          players.push({ id: lp.player_id, seat: lp.seat_index, name, isAI: lp.player_id === AI_PLAYER_ID })
-        }
-
-        lobby.players = players
-        lobby.hostId = row.host_id ?? players[0]?.id ?? null
-
-        this.lobbies.set(row.id, lobby)
-        restored++
+      let restoredCount = 0
+      for (const lobby of restoredLobbies) {
+        if (this.lobbies.has(lobby.id)) continue
+        this.lobbies.set(lobby.id, lobby)
+        restoredCount++
       }
 
-      if (restored > 0) {
-        console.log(`[LobbyManager] Restored ${restored} waiting async lobby(ies) from database`)
+      if (restoredCount > 0) {
+        console.log(`[LobbyManager] Restored ${restoredCount} waiting async lobby(ies) from database`)
       }
     } catch (err) {
       console.error('[LobbyManager] Failed to restore waiting lobbies:', err)
