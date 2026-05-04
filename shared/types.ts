@@ -71,6 +71,21 @@ export type ActiveGameSummary = {
   players: PlayerInfo[]
 }
 
+export type PlayerStats = {
+  gamesPlayed: number
+  gamesWon: number
+  uniqueOpponents: number
+}
+
+export type GlobalStats = {
+  totalGames: number
+  realtimeGames: number
+  asyncGames: number
+  wonByAllEighteen: number
+  wonByNoMoves: number
+  wonByForfeit: number
+}
+
 export type ClientMessage =
   | { type: 'JOIN_LOBBY'; lobbyId: string; playerName: string }
   | { type: 'START_GAME' }

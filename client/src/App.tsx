@@ -14,7 +14,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, setActiveGames, activeGames } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const fetchActiveGames = useCallback(() => {
@@ -183,6 +183,7 @@ export default function App() {
           globalError={errorMessage}
           activeGames={activeGames}
           onEnterGame={handleEnterGame}
+          playerId={myPlayerId}
         />
       )}
       {screen === 'lobby' && <LobbyScreen onNavigate={setScreen} />}

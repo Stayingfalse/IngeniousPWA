@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
-import type { TurnMode, ActiveGameSummary } from '@ingenious/shared'
+import type { TurnMode, ActiveGameSummary, PlayerStats, GlobalStats } from '@ingenious/shared'
 import db from '../services/database'
 
 // Valid real-time turn timer presets (seconds). null = async/turn-based.
@@ -184,6 +184,41 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send({ games })
+  })
+
+  // Player statistics (30 per minute per IP)
+  fastify.get('/api/player/stats', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id)
+    const stats: PlayerStats = {
+      gamesPlayed: row?.games_played ?? 0,
+      gamesWon: row?.games_won ?? 0,
+      uniqueOpponents: row?.unique_opponents ?? 0,
+    }
+    return reply.send({ stats })
+  })
+
+  // Global statistics — public (30 per minute per IP)
+  fastify.get('/api/stats', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (_request, reply) => {
+    const row = globalStatQueries.get.get()
+    const stats: GlobalStats = {
+      totalGames: row?.total_games ?? 0,
+      realtimeGames: row?.realtime_games ?? 0,
+      asyncGames: row?.async_games ?? 0,
+      wonByAllEighteen: row?.won_by_all_eighteen ?? 0,
+      wonByNoMoves: row?.won_by_no_moves ?? 0,
+      wonByForfeit: row?.won_by_forfeit ?? 0,
+    }
+    return reply.send({ stats })
   })
 
   // Health check

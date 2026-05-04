@@ -72,6 +72,7 @@ db.exec(`
 const migrations = [
   "ALTER TABLE lobbies ADD COLUMN turn_mode TEXT DEFAULT 'realtime'",
   'ALTER TABLE lobbies ADD COLUMN turn_limit_seconds INTEGER',
+  'ALTER TABLE game_results ADD COLUMN win_reason TEXT',
 ]
 for (const sql of migrations) {
   try {
@@ -192,11 +193,12 @@ export interface GameResultRow {
   duration_seconds: number
   finished_at: number
   winner_name: string | null
+  win_reason: string | null
 }
 
 export const gameResultQueries = {
   insert: db.prepare(
-    'INSERT INTO game_results (id, lobby_id, winner_id, final_scores, move_count, duration_seconds) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO game_results (id, lobby_id, winner_id, final_scores, move_count, duration_seconds, win_reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ),
   findRecent: db.prepare<[], GameResultRow>(
     `SELECT gr.*, p.display_name as winner_name
@@ -249,6 +251,52 @@ export const playerGameQueries = {
      FROM lobby_players lp
      JOIN lobbies l ON l.id = lp.lobby_id
      WHERE lp.player_id = ? AND l.status = 'in_progress'`,
+  ),
+}
+
+// ── Stats queries ─────────────────────────────────────────────────────────────
+
+export interface PlayerStatRow {
+  games_played: number
+  games_won: number
+  unique_opponents: number
+}
+
+export const playerStatQueries = {
+  getForPlayer: db.prepare<[string, string, string], PlayerStatRow>(
+    `SELECT
+       (SELECT COUNT(*) FROM game_results gr
+        JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id
+        WHERE lp.player_id = ?) AS games_played,
+       (SELECT COUNT(*) FROM game_results WHERE winner_id = ?) AS games_won,
+       (SELECT COUNT(DISTINCT lp2.player_id)
+        FROM lobby_players lp1
+        JOIN lobby_players lp2 ON lp2.lobby_id = lp1.lobby_id AND lp2.player_id != lp1.player_id
+        JOIN game_results gr ON gr.lobby_id = lp1.lobby_id
+        WHERE lp1.player_id = ?) AS unique_opponents`,
+  ),
+}
+
+export interface GlobalStatRow {
+  total_games: number
+  realtime_games: number
+  async_games: number
+  won_by_all_eighteen: number
+  won_by_no_moves: number
+  won_by_forfeit: number
+}
+
+export const globalStatQueries = {
+  get: db.prepare<[], GlobalStatRow>(
+    `SELECT
+       COUNT(*) AS total_games,
+       SUM(CASE WHEN COALESCE(l.turn_mode, 'realtime') = 'realtime' THEN 1 ELSE 0 END) AS realtime_games,
+       SUM(CASE WHEN l.turn_mode = 'async' THEN 1 ELSE 0 END) AS async_games,
+       SUM(CASE WHEN gr.win_reason = 'all_eighteen' THEN 1 ELSE 0 END) AS won_by_all_eighteen,
+       SUM(CASE WHEN gr.win_reason = 'no_moves' THEN 1 ELSE 0 END) AS won_by_no_moves,
+       SUM(CASE WHEN gr.win_reason = 'forfeit' THEN 1 ELSE 0 END) AS won_by_forfeit
+     FROM game_results gr
+     LEFT JOIN lobbies l ON l.id = gr.lobby_id`,
   ),
 }
 

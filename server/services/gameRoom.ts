@@ -513,6 +513,7 @@ export class GameRoom {
         JSON.stringify(this.state.scores),
         this.state.moveCount,
         duration,
+        reason,
       )
       lobbyQueries.setFinished.run('finished', this.lobbyId)
       snapshotQueries.delete.run(this.lobbyId)
