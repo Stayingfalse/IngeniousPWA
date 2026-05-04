@@ -8,7 +8,6 @@ import fs from 'fs'
 import apiRoutes from './routes/api'
 import websocketRoutes from './routes/websocket'
 import { lobbyManager } from './services/lobbyManager'
-import { tournamentManager } from './services/tournamentManager'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -30,8 +29,6 @@ async function start() {
   })
 
   // Register routes
-  tournamentManager.setLobbyManager(lobbyManager)
-  tournamentManager.restoreFromDatabase()
   await fastify.register(apiRoutes)
   await fastify.register(websocketRoutes)
 
