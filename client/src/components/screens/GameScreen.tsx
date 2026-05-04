@@ -41,6 +41,12 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
   const { gameState, myRack, selectedTileIndex, tileFlipped, selectTile, flipTile, gameOver, lastIngenious, scoringAnimation } = useGameStore()
   const { myPlayerId, lobbyState, isSpectating } = useLobbyStore()
 
+  const isHost = lobbyState?.hostId === myPlayerId
+
+  const handleKickPlayer = (targetPlayerId: string) => {
+    wsClient.send({ type: 'KICK_PLAYER', targetPlayerId })
+  }
+
   const [colourBlindMode, toggleColourBlindMode] = useColourBlindMode()
 
   const isMyTurn = !isSpectating && gameState?.currentPlayerId === myPlayerId
@@ -307,6 +313,8 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             flashColors={scoringAnimation?.flashColors}
             forfeitedPlayerIds={gameState?.forfeitedPlayerIds ?? []}
             spectators={lobbyState?.spectators ?? []}
+            hostId={lobbyState?.hostId}
+            onKickPlayer={isHost && !isSpectating ? handleKickPlayer : undefined}
           />
         </div>
       </div>

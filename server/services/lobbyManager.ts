@@ -219,6 +219,83 @@ export class LobbyManager {
     return {}
   }
 
+  deleteLobby(lobbyId: string, requestingPlayerId: string): { error?: string } {
+    const lobby = this.getLobby(lobbyId)
+    if (!lobby) return { error: 'LOBBY_NOT_FOUND' }
+    if (lobby.hostId !== requestingPlayerId) return { error: 'NOT_HOST' }
+    if (lobby.status !== 'waiting') return { error: 'GAME_ALREADY_STARTED' }
+
+    // Notify all connected players that the lobby is closing
+    lobby.broadcast({ type: 'LOBBY_CLOSED' })
+
+    // Clean up DB
+    try {
+      lobbyPlayerQueries.deleteByLobby.run(lobbyId)
+      lobbyQueries.delete.run(lobbyId)
+    } catch {
+      // Non-critical
+    }
+
+    this.lobbies.delete(lobbyId)
+    return {}
+  }
+
+  setAutoStart(lobbyId: string, requestingPlayerId: string, enabled: boolean): { error?: string } {
+    const lobby = this.getLobby(lobbyId)
+    if (!lobby) return { error: 'LOBBY_NOT_FOUND' }
+    if (lobby.hostId !== requestingPlayerId) return { error: 'NOT_HOST' }
+    if (lobby.status !== 'waiting') return { error: 'GAME_ALREADY_STARTED' }
+
+    lobby.autoStart = enabled
+
+    try {
+      lobbyQueries.updateAutoStart.run(enabled ? 1 : 0, lobbyId)
+    } catch {
+      // Non-critical
+    }
+
+    // Broadcast updated lobby state to all members
+    lobby.broadcast({ type: 'LOBBY_STATE_UPDATED', lobbyState: lobby.getLobbyState() })
+    return {}
+  }
+
+  kickPlayer(lobbyId: string, hostId: string, targetPlayerId: string): { error?: string } {
+    const lobby = this.getLobby(lobbyId)
+    if (!lobby) return { error: 'LOBBY_NOT_FOUND' }
+    if (lobby.hostId !== hostId) return { error: 'NOT_HOST' }
+    if (targetPlayerId === hostId) return { error: 'CANNOT_KICK_SELF' }
+
+    const target = lobby.players.find(p => p.id === targetPlayerId)
+    if (!target) return { error: 'PLAYER_NOT_FOUND' }
+    if (target.isAI) return { error: 'CANNOT_KICK_AI' }
+
+    // Notify the kicked player
+    lobby.send(targetPlayerId, { type: 'PLAYER_KICKED' })
+
+    if (lobby.status === 'waiting') {
+      // Remove from player list and DB
+      lobby.players = lobby.players.filter(p => p.id !== targetPlayerId)
+      lobby.connections.delete(targetPlayerId)
+
+      try {
+        lobbyPlayerQueries.delete.run(lobbyId, targetPlayerId)
+      } catch {
+        // Non-critical
+      }
+
+      // Notify remaining members
+      lobby.broadcast({ type: 'PLAYER_LEFT', playerId: targetPlayerId })
+    } else if (lobby.status === 'in_progress' && lobby.gameRoom) {
+      // Forfeit on behalf of the kicked player
+      lobby.gameRoom.handleForfeit(targetPlayerId)
+      // Remove the connection so the kicked player stops receiving updates
+      lobby.connections.delete(targetPlayerId)
+      lobby.gameRoom.removeConnection(targetPlayerId)
+    }
+
+    return {}
+  }
+
   playerDisconnected(lobbyId: string, playerId: string): void {
     const lobby = this.getLobby(lobbyId)
     if (!lobby) return

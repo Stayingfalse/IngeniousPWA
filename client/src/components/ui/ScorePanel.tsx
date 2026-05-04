@@ -20,6 +20,8 @@ interface ScorePanelProps {
   flashColors?: Set<Color>
   forfeitedPlayerIds?: string[]
   spectators?: { id: string; name: string }[]
+  hostId?: string
+  onKickPlayer?: (playerId: string) => void
 }
 
 export default function ScorePanel({
@@ -31,7 +33,10 @@ export default function ScorePanel({
   flashColors,
   forfeitedPlayerIds = [],
   spectators = [],
+  hostId,
+  onKickPlayer,
 }: ScorePanelProps) {
+  const isHost = myPlayerId === hostId
   return (
     <>
       {/* Compact portrait layout: horizontal rows per player */}
@@ -57,6 +62,17 @@ export default function ScorePanel({
                     {name}{isMe ? ' ★' : ''}
                   </span>
                   {isForfeited && <span className="text-[9px] text-red-400 ml-0.5">✕</span>}
+                  {isHost && !isMe && !isForfeited && onKickPlayer && (
+                    <button
+                      onClick={() => onKickPlayer(pid)}
+                      title={`Remove ${name}`}
+                      className="ml-0.5 text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   {COLORS.map(color => {
@@ -117,10 +133,21 @@ export default function ScorePanel({
                   {isCurrent && !isForfeited && (
                     <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
                   )}
-                  <span className={`text-xs font-medium ${isMe ? 'text-purple-300' : 'text-gray-300'}`}>
+                  <span className={`text-xs font-medium flex-1 ${isMe ? 'text-purple-300' : 'text-gray-300'}`}>
                     {name}{isMe ? ' (you)' : ''}
                   </span>
                   {isForfeited && <span className="text-[10px] text-red-400 ml-0.5">(forfeited)</span>}
+                  {isHost && !isMe && !isForfeited && onKickPlayer && (
+                    <button
+                      onClick={() => onKickPlayer(pid)}
+                      title={`Remove ${name}`}
+                      className="text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-6 gap-0.5">

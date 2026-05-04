@@ -27,6 +27,32 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
       }
 
       switch (msg.type) {
+        case 'SET_AUTO_START': {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
+            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            return
+          }
+
+          const result = lobbyManager.setAutoStart(currentLobbyId, playerId, msg.enabled)
+          if (result.error) {
+            send({ type: 'ERROR', code: result.error, message: result.error })
+          }
+          break
+        }
+
+        case 'KICK_PLAYER': {
+          if (!playerId || !currentLobbyId || isSpectatorConnection) {
+            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            return
+          }
+
+          const result = lobbyManager.kickPlayer(currentLobbyId, playerId, msg.targetPlayerId)
+          if (result.error) {
+            send({ type: 'ERROR', code: result.error, message: result.error })
+          }
+          break
+        }
+
         case 'PING':
           send({ type: 'PONG' })
           break
