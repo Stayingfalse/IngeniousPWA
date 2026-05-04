@@ -108,7 +108,7 @@ export default function App() {
           setErrorMessage('Lobby not found. It may have been closed.')
           localStorage.removeItem('lastLobbyId')
         } else if (msg.code === 'GAME_ALREADY_STARTED') {
-          setErrorMessage('This game has already finished and cannot be joined.')
+          setErrorMessage('This game has already ended or is no longer available to join.')
         } else {
           setErrorMessage(msg.message || 'An error occurred')
         }
