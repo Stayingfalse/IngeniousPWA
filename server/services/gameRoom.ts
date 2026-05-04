@@ -25,35 +25,11 @@ import {
   emptyScores,
   minScore,
 } from '@ingenious/shared'
-import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys, snapshotQueries } from './database'
+import { gameResultQueries, lobbyQueries, playerQueries, snapshotQueries } from './database'
 import { AI_PLAYER_ID, chooseBestMove } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
+import { notifyPlayerTurnIfOffline } from './pushNotifications'
 import { wsError } from '../lib/errors'
-
-// Lazy-load web-push to avoid crashing if not installed
-function sendPushNotification(
-  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
-  payload: object,
-): void {
-  if (!vapidKeys.publicKey || !vapidKeys.privateKey) return
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const webpush = require('web-push') as {
-      setVapidDetails(subject: string, pub: string, priv: string): void
-      sendNotification(sub: object, payload: string): Promise<void>
-    }
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:ingenious@example.com',
-      vapidKeys.publicKey,
-      vapidKeys.privateKey,
-    )
-    webpush.sendNotification(subscription, JSON.stringify(payload)).catch(() => {
-      // Non-critical — push may fail if subscription expired
-    })
-  } catch {
-    // web-push not available
-  }
-}
 
 export interface GameRoomSnapshot {
   state: GameState
@@ -563,23 +539,13 @@ export class GameRoom {
     const currentPlayerId = this.state.currentPlayerId
     const ws = this.connections.get(currentPlayerId)
     const isOnline = ws && ws.readyState === 1
-    if (isOnline) return
 
-    try {
-      const sub = pushSubscriptionQueries.findByPlayer.get(currentPlayerId)
-      if (!sub) return
-      const playerName = this.playerNames.get(currentPlayerId) ?? 'You'
-      sendPushNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        {
-          title: 'Ingenious – Your Turn!',
-          body: `${playerName}, it's your turn in game ${this.lobbyId}.`,
-          url: `/?join=${this.lobbyId}`,
-        },
-      )
-    } catch {
-      // Non-critical
-    }
+    notifyPlayerTurnIfOffline({
+      lobbyId: this.lobbyId,
+      currentPlayerId,
+      playerDisplayName: this.playerNames.get(currentPlayerId) ?? 'You',
+      isOnline: Boolean(isOnline),
+    })
   }
 
   private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves' | 'forfeit'): void {
