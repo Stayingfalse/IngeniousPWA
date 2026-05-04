@@ -1,5 +1,5 @@
 import { WebSocket } from '@fastify/websocket'
-import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, GameState } from '@ingenious/shared'
+import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, AiDifficulty, GameState } from '@ingenious/shared'
 import { GameRoom } from './gameRoom'
 import type { GameRoomSnapshot } from './gameRoom'
 import { lobbyQueries, lobbyPlayerQueries, snapshotQueries, playerQueries } from './database'
@@ -25,6 +25,7 @@ export class Lobby {
   turnMode: TurnMode
   turnLimitSeconds: number | null
   vsAI: boolean = false
+  aiDifficulty: AiDifficulty = 'hard'
 
   constructor(id: string, maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null) {
     this.id = id
@@ -84,10 +85,11 @@ export class LobbyManager {
     setInterval(() => this.flushAllSnapshots(), 60 * 1000)
   }
 
-  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null, vsAI = false): Lobby {
+  createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null, vsAI = false, aiDifficulty: AiDifficulty = 'hard'): Lobby {
     const id = this.generateLobbyCode()
     const lobby = new Lobby(id, maxPlayers, turnMode, turnLimitSeconds)
     lobby.vsAI = vsAI
+    lobby.aiDifficulty = aiDifficulty
     this.lobbies.set(id, lobby)
 
     try {
@@ -175,7 +177,7 @@ export class LobbyManager {
 
     const turnLimitMs = lobby.turnLimitSeconds !== null ? lobby.turnLimitSeconds * 1000 : null
     const aiPlayerIds = new Set(lobby.players.filter(p => p.isAI).map(p => p.id))
-    const gameRoom = new GameRoom(lobbyId, playerIds, playerNames, turnLimitMs, aiPlayerIds)
+    const gameRoom = new GameRoom(lobbyId, playerIds, playerNames, turnLimitMs, aiPlayerIds, lobby.aiDifficulty)
     gameRoom.onAfterMove = () => this.saveSnapshot(lobbyId)
 
     lobby.gameRoom = gameRoom
