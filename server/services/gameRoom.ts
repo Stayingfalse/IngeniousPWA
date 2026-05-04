@@ -78,6 +78,8 @@ export class GameRoom {
   private pendingSwapPlayerId: string | null = null
   // Optional callback invoked after each state-changing move (used for snapshots)
   onAfterMove: (() => void) | null = null
+  // Optional callback invoked when the game finishes
+  onGameOver: ((results: GameResults) => void) | null = null
   // Set of player IDs that are AI-controlled
   private aiPlayerIds: Set<string> = new Set()
   // AI difficulty level
@@ -131,6 +133,7 @@ export class GameRoom {
     room.turnTimer = null
     room.turnDeadline = null
     room.onAfterMove = null
+    room.onGameOver = null
     room.aiPlayerIds = new Set(data.state.playerOrder.filter(id => id === AI_PLAYER_ID))
     if (data.state.status === 'in_progress') {
       room.startTurnTimer()
@@ -592,6 +595,8 @@ export class GameRoom {
     }
 
     this.broadcast({ type: 'GAME_OVER', results })
+
+    this.onGameOver?.(results)
 
     // Persist to DB and clean up snapshot
     try {
