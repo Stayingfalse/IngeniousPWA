@@ -10,6 +10,9 @@ import { wsClient } from './lib/wsClient'
 
 type Screen = 'home' | 'lobby' | 'game'
 
+/** How often (ms) to refresh the active-games list while on the home screen. */
+const ACTIVE_GAMES_POLL_INTERVAL_MS = 30_000
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
@@ -111,9 +114,9 @@ export default function App() {
   const pendingJoinFromUrlRef = useRef<string | null>(null)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const joinCode = params.get('join')
-    if (joinCode) {
-      pendingJoinFromUrlRef.current = joinCode.toUpperCase().trim()
+    const pendingLobbyId = params.get('join')
+    if (pendingLobbyId) {
+      pendingJoinFromUrlRef.current = pendingLobbyId.toUpperCase().trim()
       const url = new URL(window.location.href)
       url.searchParams.delete('join')
       window.history.replaceState(null, '', url.toString())
@@ -141,7 +144,7 @@ export default function App() {
   // "Games in Progress" list updates when it becomes the player's turn.
   useEffect(() => {
     if (screen !== 'home') return
-    const id = setInterval(fetchActiveGames, 30_000)
+    const id = setInterval(fetchActiveGames, ACTIVE_GAMES_POLL_INTERVAL_MS)
     return () => clearInterval(id)
   }, [screen, fetchActiveGames])
 
