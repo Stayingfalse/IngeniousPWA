@@ -19,6 +19,7 @@ interface ScorePanelProps {
   currentPlayerId: string
   flashColors?: Set<Color>
   forfeitedPlayerIds?: string[]
+  spectators?: { id: string; name: string }[]
 }
 
 export default function ScorePanel({
@@ -29,6 +30,7 @@ export default function ScorePanel({
   currentPlayerId,
   flashColors,
   forfeitedPlayerIds = [],
+  spectators = [],
 }: ScorePanelProps) {
   return (
     <>
@@ -85,6 +87,16 @@ export default function ScorePanel({
             )
           })}
         </div>
+        {spectators.length > 0 && (
+          <div className="flex flex-wrap gap-1 pt-1">
+            <span className="text-[9px] text-sky-400/70 flex-shrink-0 self-center">👁</span>
+            {spectators.map(sp => (
+              <span key={sp.id} className="text-[9px] text-sky-400/80 bg-sky-900/20 px-1 rounded">
+                {sp.name}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Full landscape layout: vertical bar charts */}
@@ -140,6 +152,19 @@ export default function ScorePanel({
             )
           })}
         </div>
+
+        {spectators.length > 0 && (
+          <div className="mt-3 pt-2 border-t border-[#312e6b]/50">
+            <p className="text-[10px] text-sky-400/70 font-medium mb-1">👁 Watching</p>
+            <div className="flex flex-col gap-0.5">
+              {spectators.map(sp => (
+                <span key={sp.id} className="text-[10px] text-sky-400/80 truncate">
+                  {sp.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

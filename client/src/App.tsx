@@ -17,7 +17,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, myPlayerId, setActiveGames, activeGames, startSpectating, spectatorJoined, spectatorLeft } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
 
   const fetchActiveGames = useCallback(() => {
@@ -101,6 +101,14 @@ export default function App() {
         // no additional client state change needed here.
         break
 
+      case 'SPECTATOR_JOINED':
+        spectatorJoined(msg.spectator)
+        break
+
+      case 'SPECTATOR_LEFT':
+        spectatorLeft(msg.spectatorId)
+        break
+
       case 'ERROR':
         console.error('[WS Error]', msg.code, msg.message)
         // Display error to user based on error code
@@ -114,7 +122,7 @@ export default function App() {
         }
         break
     }
-  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver])
+  }, [setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, setGameState, setMyRack, setIngenious, setGameOver, spectatorJoined, spectatorLeft])
 
   const { connected } = useWebSocket(handleMessage, authReady)
 

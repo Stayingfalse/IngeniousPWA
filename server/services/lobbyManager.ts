@@ -1,5 +1,5 @@
 import { WebSocket } from '@fastify/websocket'
-import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, AiDifficulty, GameState } from '@ingenious/shared'
+import type { PlayerInfo, LobbyState, ServerMessage, TurnMode, AiDifficulty, GameState, SpectatorInfo } from '@ingenious/shared'
 import { GameRoom } from './gameRoom'
 import type { GameRoomSnapshot } from './gameRoom'
 import { lobbyQueries, lobbyPlayerQueries, snapshotQueries, playerQueries } from './database'
@@ -17,6 +17,7 @@ export class Lobby {
   id: string
   status: 'waiting' | 'in_progress' | 'finished' = 'waiting'
   players: LobbyPlayer[] = []
+  spectators: SpectatorInfo[] = []
   maxPlayers: number
   hostId: string | null = null
   connections: Map<string, WebSocket> = new Map()
@@ -43,6 +44,7 @@ export class Lobby {
       hostId: this.hostId ?? '',
       turnMode: this.turnMode,
       turnLimitSeconds: this.turnLimitSeconds,
+      spectators: [...this.spectators],
     }
   }
 

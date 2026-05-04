@@ -84,6 +84,12 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           // Spectator path: non-participant watching an in-progress game
           if ('isSpectator' in result && result.isSpectator) {
             isSpectatorConnection = true
+            // Add to lobby spectators list before broadcasting join (WS not added yet)
+            const spectatorEntry = { id: pid, name: playerName }
+            lobby.spectators.push(spectatorEntry)
+            // Notify existing connections about the new spectator
+            lobby.gameRoom!.broadcast({ type: 'SPECTATOR_JOINED', spectator: spectatorEntry })
+            // Now add spectator's WS and send initial state
             lobby.gameRoom!.addSpectatorConnection(pid, socket)
             send({
               type: 'SPECTATING',
@@ -253,9 +259,15 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
     socket.on('close', () => {
       if (playerId && currentLobbyId) {
         if (isSpectatorConnection) {
-          // Spectators are not tracked as lobby players — just remove their game connection
           const lobby = lobbyManager.getLobby(currentLobbyId)
-          lobby?.gameRoom?.removeSpectatorConnection(playerId)
+          if (lobby) {
+            // Remove from spectator list and WS first, then broadcast departure
+            lobby.spectators = lobby.spectators.filter(s => s.id !== playerId)
+            lobby.gameRoom?.removeSpectatorConnection(playerId)
+            if (lobby.gameRoom) {
+              lobby.gameRoom.broadcast({ type: 'SPECTATOR_LEFT', spectatorId: playerId })
+            }
+          }
         } else {
           lobbyManager.playerDisconnected(currentLobbyId, playerId)
         }
@@ -266,7 +278,13 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
       if (playerId && currentLobbyId) {
         if (isSpectatorConnection) {
           const lobby = lobbyManager.getLobby(currentLobbyId)
-          lobby?.gameRoom?.removeSpectatorConnection(playerId)
+          if (lobby) {
+            lobby.spectators = lobby.spectators.filter(s => s.id !== playerId)
+            lobby.gameRoom?.removeSpectatorConnection(playerId)
+            if (lobby.gameRoom) {
+              lobby.gameRoom.broadcast({ type: 'SPECTATOR_LEFT', spectatorId: playerId })
+            }
+          }
         } else {
           lobbyManager.playerDisconnected(currentLobbyId, playerId)
         }

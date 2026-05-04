@@ -52,6 +52,11 @@ export type TurnMode = 'realtime' | 'async'
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
 
+export type SpectatorInfo = {
+  id: string
+  name: string
+}
+
 export type LobbyState = {
   id: string
   status: GameStatus
@@ -60,6 +65,7 @@ export type LobbyState = {
   hostId: string
   turnMode: TurnMode
   turnLimitSeconds: number | null
+  spectators?: SpectatorInfo[]
 }
 
 export type GameResults = {
@@ -114,5 +120,7 @@ export type ServerMessage =
   | { type: 'YOUR_NEW_RACK'; rack: Tile[] }
   | { type: 'GAME_OVER'; results: GameResults }
   | { type: 'PLAYER_FORFEITED'; playerId: string }
+  | { type: 'SPECTATOR_JOINED'; spectator: SpectatorInfo }
+  | { type: 'SPECTATOR_LEFT'; spectatorId: string }
   | { type: 'ERROR'; code: string; message: string }
   | { type: 'PONG' }
