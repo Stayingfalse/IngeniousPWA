@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 import { readFileSync } from 'fs'
 
+// Vite currently bundles TS configs as CJS during `vite build`, which triggers
+// Vite's own CJS Node API deprecation warning. This silences that warning until
+// Vite fully migrates config loading to ESM.
+process.env.VITE_CJS_IGNORE_WARNING = process.env.VITE_CJS_IGNORE_WARNING ?? '1'
+
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string }
 
 export default defineConfig({

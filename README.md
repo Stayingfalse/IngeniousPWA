@@ -199,23 +199,12 @@ ingenious/
 
 ### 🚧 Work In Progress / Known Gaps
 
-#### Game Rules
-- [x] Rack swap eligibility prompt shown to player before turn automatically ends
-- [ ] Spectator/observer mode (watch a game without playing)
+This repo intentionally avoids an in-README backlog/TODO list.
+Track new features and known gaps in GitHub Issues so they can be discussed and prioritized.
 
-#### Frontend Polish
-- [x] Tile rotation / orientation selection before placement (Flip button swaps which hex receives each tile colour; ghost preview updates accordingly)
-- [ ] Animated score increments
-- [ ] Mobile touch drag-to-place support (board is currently click-only)
-- [ ] Sound effects / audio feedback
-- [ ] Responsive layout optimisation for small screens in landscape
-- [x] Direct-join shareable URL (e.g. `?join=LOBBY_CODE` auto-fills the lobby code so players can click a link to join; lobby screen also has a "Copy invite link" button)
+### Design Considerations
 
-#### Multiplayer
-- [x] Turn timer / time limit per turn to prevent stalled games (60 s countdown visible in header; turn auto-advances on timeout)
-- [x] Broadcast player name changes to all lobby members in real time (via `CHANGE_NAME` WebSocket message)
-
-#### Infrastructure & Quality
-- [ ] Unit tests for server routes and WebSocket handlers
-- [ ] Integration / end-to-end tests
-- [ ] Player statistics / leaderboard page (win rates per player using the existing `/api/history` data)
+- **Server-authoritative multiplayer**: all rules are enforced server-side; the client is primarily a renderer.
+- **Shared contract**: protocol and domain types are centralized in `shared/types.ts`.
+- **Determinism**: scoring and legality should remain deterministic and testable.
+- **Deployment simplicity**: single-container runtime with SQLite persisted to `/data`.

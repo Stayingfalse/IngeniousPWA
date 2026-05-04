@@ -4,6 +4,7 @@ import type { ClientMessage } from '@ingenious/shared'
 import { playerQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
 import { v4 as uuidv4 } from 'uuid'
+import { wsError } from '../lib/errors'
 
 export default async function websocketRoutes(fastify: FastifyInstance) {
   fastify.get('/ws', { websocket: true }, (socket: WebSocket, request) => {
@@ -17,38 +18,42 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
       }
     }
 
+    const sendError = (code: string, message?: string) => {
+      send(wsError(code, message))
+    }
+
     socket.on('message', (rawData: Buffer | string) => {
       let msg: ClientMessage
       try {
         msg = JSON.parse(rawData.toString()) as ClientMessage
       } catch {
-        send({ type: 'ERROR', code: 'INVALID_JSON', message: 'Invalid JSON' })
+        sendError('INVALID_JSON', 'Invalid JSON')
         return
       }
 
       switch (msg.type) {
         case 'SET_AUTO_START': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const result = lobbyManager.setAutoStart(currentLobbyId, playerId, msg.enabled)
           if (result.error) {
-            send({ type: 'ERROR', code: result.error, message: result.error })
+            sendError(result.error)
           }
           break
         }
 
         case 'KICK_PLAYER': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const result = lobbyManager.kickPlayer(currentLobbyId, playerId, msg.targetPlayerId)
           if (result.error) {
-            send({ type: 'ERROR', code: result.error, message: result.error })
+            sendError(result.error)
           }
           break
         }
@@ -101,7 +106,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
           const result = lobbyManager.joinLobby(currentLobbyId, pid, playerName, socket)
 
           if ('error' in result) {
-            send({ type: 'ERROR', code: result.error, message: result.error })
+            sendError(result.error)
             return
           }
 
@@ -170,26 +175,26 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
         case 'START_GAME': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const startResult = lobbyManager.startGame(currentLobbyId, playerId)
           if (startResult.error) {
-            send({ type: 'ERROR', code: startResult.error, message: startResult.error })
+            sendError(startResult.error)
           }
           break
         }
 
         case 'PLACE_TILE': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const lobby = lobbyManager.getLobby(currentLobbyId)
           if (!lobby?.gameRoom) {
-            send({ type: 'ERROR', code: 'NO_GAME', message: 'No active game' })
+            sendError('NO_GAME', 'No active game')
             return
           }
 
@@ -199,13 +204,13 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
         case 'SWAP_RACK': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const lobby = lobbyManager.getLobby(currentLobbyId)
           if (!lobby?.gameRoom) {
-            send({ type: 'ERROR', code: 'NO_GAME', message: 'No active game' })
+            sendError('NO_GAME', 'No active game')
             return
           }
 
@@ -215,13 +220,13 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
         case 'DECLINE_SWAP': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const lobby = lobbyManager.getLobby(currentLobbyId)
           if (!lobby?.gameRoom) {
-            send({ type: 'ERROR', code: 'NO_GAME', message: 'No active game' })
+            sendError('NO_GAME', 'No active game')
             return
           }
 
@@ -231,13 +236,13 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
         case 'FORFEIT_GAME': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const lobby = lobbyManager.getLobby(currentLobbyId)
           if (!lobby?.gameRoom) {
-            send({ type: 'ERROR', code: 'NO_GAME', message: 'No active game' })
+            sendError('NO_GAME', 'No active game')
             return
           }
 
@@ -247,13 +252,13 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
         case 'CHANGE_NAME': {
           if (!playerId || !currentLobbyId || isSpectatorConnection) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 
           const name = msg.name?.trim()
           if (!name || name.length < 1 || name.length > 20) {
-            send({ type: 'ERROR', code: 'INVALID_NAME', message: 'Name must be 1-20 characters' })
+            sendError('INVALID_NAME', 'Name must be 1-20 characters')
             return
           }
 
@@ -274,7 +279,7 @@ export default async function websocketRoutes(fastify: FastifyInstance) {
 
         case 'REQUEST_SYNC': {
           if (!playerId || !currentLobbyId) {
-            send({ type: 'ERROR', code: 'NOT_IN_LOBBY', message: 'Not in a lobby' })
+            sendError('NOT_IN_LOBBY', 'Not in a lobby')
             return
           }
 

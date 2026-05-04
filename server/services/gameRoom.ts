@@ -25,34 +25,12 @@ import {
   emptyScores,
   minScore,
 } from '@ingenious/shared'
-import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys, snapshotQueries } from './database'
+import { gameResultQueries, lobbyQueries, playerQueries, snapshotQueries } from './database'
 import { AI_PLAYER_ID, chooseBestMove } from './aiPlayer'
 import { v4 as uuidv4 } from 'uuid'
-
-// Lazy-load web-push to avoid crashing if not installed
-function sendPushNotification(
-  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
-  payload: object,
-): void {
-  if (!vapidKeys.publicKey || !vapidKeys.privateKey) return
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const webpush = require('web-push') as {
-      setVapidDetails(subject: string, pub: string, priv: string): void
-      sendNotification(sub: object, payload: string): Promise<void>
-    }
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || 'mailto:ingenious@example.com',
-      vapidKeys.publicKey,
-      vapidKeys.privateKey,
-    )
-    webpush.sendNotification(subscription, JSON.stringify(payload)).catch(() => {
-      // Non-critical — push may fail if subscription expired
-    })
-  } catch {
-    // web-push not available
-  }
-}
+import { notifyPlayerTurnIfOffline } from './pushNotifications'
+import { wsError } from '../lib/errors'
+import { createTurnTimer } from './turnTimer'
 
 export interface GameRoomSnapshot {
   state: GameState
@@ -68,7 +46,7 @@ export class GameRoom {
   private startedAt: number = Date.now()
   private lobbyId: string
   private turnLimitMs: number | null
-  private turnTimer: ReturnType<typeof setTimeout> | null = null
+  private turnTimer = createTurnTimer()
   private turnDeadline: number | null = null
   // Player display names for push notification messages
   private playerNames: Map<string, string> = new Map()
@@ -128,7 +106,7 @@ export class GameRoom {
     room.playerNames = new Map(Object.entries(data.playerNames))
     room.pendingLastMove = undefined
     room.pendingSwapPlayerId = data.pendingSwapPlayerId
-    room.turnTimer = null
+    room.turnTimer = createTurnTimer()
     room.turnDeadline = null
     room.onAfterMove = null
     room.aiPlayerIds = new Set(data.state.playerOrder.filter(id => id === AI_PLAYER_ID))
@@ -177,6 +155,10 @@ export class GameRoom {
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify(msg))
     }
+  }
+
+  private sendError(playerId: string, code: string, message?: string): void {
+    this.send(playerId, wsError(code, message))
   }
 
   broadcast(msg: ServerMessage, excludePlayerId?: string): void {
@@ -234,12 +216,12 @@ export class GameRoom {
     hexB: AxialCoord,
   ): void {
     if (this.state.status !== 'in_progress') {
-      this.send(playerId, { type: 'ERROR', code: 'GAME_NOT_ACTIVE', message: 'Game is not active' })
+      this.sendError(playerId, 'GAME_NOT_ACTIVE', 'Game is not active')
       return
     }
 
     if (this.state.currentPlayerId !== playerId) {
-      this.send(playerId, { type: 'ERROR', code: 'NOT_YOUR_TURN', message: 'Not your turn' })
+      this.sendError(playerId, 'NOT_YOUR_TURN', 'Not your turn')
       return
     }
 
@@ -252,7 +234,7 @@ export class GameRoom {
       result = applyMove(this.state, playerId, tileIndex, hexA, hexB)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      this.send(playerId, { type: 'ERROR', code: message, message })
+      this.sendError(playerId, 'INVALID_MOVE', message)
       return
     }
 
@@ -304,11 +286,11 @@ export class GameRoom {
   handleSwapRack(playerId: string): void {
     // Swap is only valid as a post-placement action when it was flagged pending
     if (this.pendingSwapPlayerId !== playerId) {
-      this.send(playerId, {
-        type: 'ERROR',
-        code: 'CANNOT_SWAP',
-        message: 'Swap is only available after placing a tile when your refilled rack contains no tiles of your lowest-scoring color',
-      })
+      this.sendError(
+        playerId,
+        'CANNOT_SWAP',
+        'Swap is only available after placing a tile when your refilled rack contains no tiles of your lowest-scoring color',
+      )
       return
     }
 
@@ -345,11 +327,7 @@ export class GameRoom {
 
   handleDeclineSwap(playerId: string): void {
     if (this.pendingSwapPlayerId !== playerId) {
-      this.send(playerId, {
-        type: 'ERROR',
-        code: 'NO_SWAP_PENDING',
-        message: 'No swap is pending for this player',
-      })
+      this.sendError(playerId, 'NO_SWAP_PENDING', 'No swap is pending for this player')
       return
     }
 
@@ -368,7 +346,7 @@ export class GameRoom {
 
   handleForfeit(playerId: string): void {
     if (this.state.status !== 'in_progress') {
-      this.send(playerId, { type: 'ERROR', code: 'GAME_NOT_ACTIVE', message: 'Game is not active' })
+      this.sendError(playerId, 'GAME_NOT_ACTIVE', 'Game is not active')
       return
     }
 
@@ -520,23 +498,21 @@ export class GameRoom {
     this.handlePlaceTile(playerId, move.tileIndex, move.hexA, move.hexB)
   }
 
-  private startTurnTimer(): void {    this.clearTurnTimer()
+  private startTurnTimer(): void {
+    this.clearTurnTimer()
     if (this.turnLimitMs === null) {
       // Async / turn-based mode — no timer
       this.turnDeadline = null
       return
     }
-    this.turnDeadline = Date.now() + this.turnLimitMs
-    this.turnTimer = setTimeout(() => {
-      this.handleTurnTimeout()
-    }, this.turnLimitMs)
+    this.turnDeadline = this.turnTimer.start({
+      turnLimitMs: this.turnLimitMs,
+      onTimeout: () => this.handleTurnTimeout(),
+    })
   }
 
   private clearTurnTimer(): void {
-    if (this.turnTimer !== null) {
-      clearTimeout(this.turnTimer)
-      this.turnTimer = null
-    }
+    this.turnTimer.clear()
     this.turnDeadline = null
   }
 
@@ -562,23 +538,13 @@ export class GameRoom {
     const currentPlayerId = this.state.currentPlayerId
     const ws = this.connections.get(currentPlayerId)
     const isOnline = ws && ws.readyState === 1
-    if (isOnline) return
 
-    try {
-      const sub = pushSubscriptionQueries.findByPlayer.get(currentPlayerId)
-      if (!sub) return
-      const playerName = this.playerNames.get(currentPlayerId) ?? 'You'
-      sendPushNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        {
-          title: 'Ingenious – Your Turn!',
-          body: `${playerName}, it's your turn in game ${this.lobbyId}.`,
-          url: `/?join=${this.lobbyId}`,
-        },
-      )
-    } catch {
-      // Non-critical
-    }
+    notifyPlayerTurnIfOffline({
+      lobbyId: this.lobbyId,
+      currentPlayerId,
+      playerDisplayName: this.playerNames.get(currentPlayerId) ?? 'You',
+      isOnline: Boolean(isOnline),
+    })
   }
 
   private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves' | 'forfeit'): void {
