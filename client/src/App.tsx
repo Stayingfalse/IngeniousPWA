@@ -23,7 +23,7 @@ export default function App() {
       .then((data: { games?: ActiveGameSummary[] }) => {
         if (data?.games) setActiveGames(data.games)
       })
-      .catch(() => {})
+      .catch((err) => console.warn('[ActiveGames] Failed to fetch active games:', err))
   }, [setActiveGames])
 
   const handleMessage = useCallback((msg: ServerMessage) => {

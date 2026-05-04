@@ -78,7 +78,7 @@ export class LobbyManager {
     // Periodically clean up stale lobbies to prevent memory leaks
     setInterval(() => this.cleanupLobbies(), 10 * 60 * 1000)
     // Periodically snapshot all in-progress games (safety net)
-    setInterval(() => this.snapshotAllGames(), 60 * 1000)
+    setInterval(() => this.flushAllSnapshots(), 60 * 1000)
   }
 
   createLobby(maxPlayers: number, turnMode: TurnMode, turnLimitSeconds: number | null): Lobby {
@@ -230,17 +230,10 @@ export class LobbyManager {
 
   /**
    * Flush snapshots for all in-progress games. Called before process exit to
-   * minimise the number of moves lost on restart.
+   * minimise the number of moves lost on restart, and also on the periodic
+   * snapshot interval.
    */
   flushAllSnapshots(): void {
-    for (const [id, lobby] of this.lobbies) {
-      if (lobby.status === 'in_progress' && lobby.gameRoom) {
-        this.saveSnapshot(id)
-      }
-    }
-  }
-
-  private snapshotAllGames(): void {
     for (const [id, lobby] of this.lobbies) {
       if (lobby.status === 'in_progress' && lobby.gameRoom) {
         this.saveSnapshot(id)
