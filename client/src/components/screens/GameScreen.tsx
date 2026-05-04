@@ -280,6 +280,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
             onSelect={selectTile}
             onFlip={flipTile}
             isMyTurn={isMyTurn && !showSwapPrompt}
+            colourBlindMode={colourBlindMode}
           />
         </div>
         )}
