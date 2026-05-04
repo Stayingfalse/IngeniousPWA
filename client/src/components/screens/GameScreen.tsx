@@ -143,6 +143,7 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
   }
 
   const [showForfeitConfirm, setShowForfeitConfirm] = useState(false)
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false)
 
   const handleForfeit = () => {
     wsClient.send({ type: 'FORFEIT_GAME' })
