@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#1ec8dd"/>
+      <stop offset="100%" stop-color="#062f38"/>
+    </radialGradient>
+    <radialGradient id="star" cx="40%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#aaf0ff"/>
+      <stop offset="100%" stop-color="#0055aa"/>
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
+  <!-- Flat-top hex outline -->
+  <polygon points="26,16 23,21.2 17,21.2 14,16 17,10.8 23,10.8" fill="#1a1a2e" stroke="#1a8a9a" stroke-width="1.5"/>
+  <!-- Blue 6-pointed star -->
+  <path d="M16,10.5 L17.2,13.8 L20.7,13.8 L17.9,15.7 L19.1,19 L16,17.1 L12.9,19 L14.1,15.7 L11.3,13.8 L14.8,13.8 Z" fill="url(#star)"/>
+</svg>
