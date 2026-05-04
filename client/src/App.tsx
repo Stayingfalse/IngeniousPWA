@@ -5,7 +5,7 @@ import { useGameStore } from './store/gameStore'
 import HomeScreen from './components/screens/HomeScreen'
 import LobbyScreen from './components/screens/LobbyScreen'
 import GameScreen from './components/screens/GameScreen'
-import type { ServerMessage } from '@ingenious/shared'
+import type { ServerMessage, ActiveGameSummary } from '@ingenious/shared'
 import { wsClient } from './lib/wsClient'
 
 type Screen = 'home' | 'lobby' | 'game'
@@ -14,8 +14,17 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [errorMessage, setErrorMessage] = useState<string>('')
   const [authReady, setAuthReady] = useState(false)
-  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName } = useLobbyStore()
+  const { setMyPlayer, setLobby, playerJoined, playerLeft, playerNameChanged, lobbyId, myPlayerName, setActiveGames, activeGames } = useLobbyStore()
   const { setGameState, setMyRack, setIngenious, setGameOver } = useGameStore()
+
+  const fetchActiveGames = useCallback(() => {
+    fetch('/api/player/games', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : { games: [] })
+      .then((data: { games?: ActiveGameSummary[] }) => {
+        if (data?.games) setActiveGames(data.games)
+      })
+      .catch((err) => console.warn('[ActiveGames] Failed to fetch active games:', err))
+  }, [setActiveGames])
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -27,8 +36,10 @@ export default function App() {
           msg.lobbyState,
           msg.seat,
         )
-        // Save lobby ID for auto-rejoin
-        localStorage.setItem('lastLobbyId', msg.lobbyState.id)
+        // Only save lastLobbyId for realtime games (async games are tracked via the API)
+        if (msg.lobbyState.turnMode === 'realtime') {
+          localStorage.setItem('lastLobbyId', msg.lobbyState.id)
+        }
         // Clear any error message on successful join
         setErrorMessage('')
         // If a game is already in progress (mid-game reconnect), go straight to the game screen
@@ -69,8 +80,13 @@ export default function App() {
 
       case 'GAME_OVER':
         setGameOver(msg.results)
-        // Clear saved lobby ID when game is over
+        // Clear saved realtime lobby ID when game is over
         localStorage.removeItem('lastLobbyId')
+        break
+
+      case 'PLAYER_FORFEITED':
+        // The following STATE_UPDATE will carry the updated forfeitedPlayerIds;
+        // no additional client state change needed here.
         break
 
       case 'ERROR':
@@ -100,7 +116,10 @@ export default function App() {
         }
       })
       .catch((err) => console.warn('[Auth] Initialization failed:', err))
-      .finally(() => setAuthReady(true))
+      .finally(() => {
+        setAuthReady(true)
+        fetchActiveGames()
+      })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -111,28 +130,44 @@ export default function App() {
     const wasDisconnected = !prevConnectedRef.current
     const nowConnected = connected
 
-    // Try to rejoin if: (reconnected AND have lobbyId) OR (first connect AND have saved lobby AND haven't tried yet)
-    const shouldReconnect = (nowConnected && wasDisconnected && !!lobbyId && screen !== 'home')
-      || (nowConnected && !hasAttemptedAutoRejoin.current && screen === 'home')
-
-    if (shouldReconnect) {
+    if (nowConnected && wasDisconnected && !!lobbyId && screen !== 'home') {
+      // WS reconnected while viewing a specific game — rejoin it
+      const savedName = localStorage.getItem('playerName')
+      const name = myPlayerName || savedName || 'Player'
+      wsClient.send({ type: 'JOIN_LOBBY', lobbyId, playerName: name })
+    } else if (nowConnected && !hasAttemptedAutoRejoin.current && screen === 'home') {
+      hasAttemptedAutoRejoin.current = true
+      // First connect: only auto-join realtime games (async games are shown in the list)
       const savedLobbyId = localStorage.getItem('lastLobbyId')
-      const targetLobbyId = lobbyId || savedLobbyId
-
-      if (targetLobbyId) {
+      if (savedLobbyId) {
         const savedName = localStorage.getItem('playerName')
         const name = myPlayerName || savedName || 'Player'
-        wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
-        hasAttemptedAutoRejoin.current = true
+        wsClient.send({ type: 'JOIN_LOBBY', lobbyId: savedLobbyId, playerName: name })
       }
     }
     prevConnectedRef.current = connected
   }, [connected, lobbyId, myPlayerName, screen])
 
-  const handleNavigateHome = () => {
+  /** Enter a specific async game from the home screen game list. */
+  const handleEnterGame = useCallback((targetLobbyId: string) => {
     useGameStore.getState().reset()
-    useLobbyStore.getState().reset()
-    localStorage.removeItem('lastLobbyId')
+    const savedName = localStorage.getItem('playerName')
+    const name = myPlayerName || savedName || 'Player'
+    wsClient.send({ type: 'JOIN_LOBBY', lobbyId: targetLobbyId, playerName: name })
+  }, [myPlayerName])
+
+  const handleNavigateHome = () => {
+    const currentTurnMode = useLobbyStore.getState().lobbyState?.turnMode
+    useGameStore.getState().reset()
+    if (currentTurnMode === 'async') {
+      // For async games, keep the lobby state (player is still in the game).
+      // Just go back to home and refresh the active games list.
+      fetchActiveGames()
+    } else {
+      // For realtime games, fully reset and clear the saved lobby.
+      useLobbyStore.getState().reset()
+      localStorage.removeItem('lastLobbyId')
+    }
     setScreen('home')
   }
 
@@ -143,7 +178,13 @@ export default function App() {
           Reconnecting…
         </div>
       )}
-      {screen === 'home' && <HomeScreen globalError={errorMessage} />}
+      {screen === 'home' && (
+        <HomeScreen
+          globalError={errorMessage}
+          activeGames={activeGames}
+          onEnterGame={handleEnterGame}
+        />
+      )}
       {screen === 'lobby' && <LobbyScreen onNavigate={setScreen} />}
       {screen === 'game' && <GameScreen onNavigateHome={handleNavigateHome} />}
     </div>

@@ -7,6 +7,7 @@ import path from 'path'
 import fs from 'fs'
 import apiRoutes from './routes/api'
 import websocketRoutes from './routes/websocket'
+import { lobbyManager } from './services/lobbyManager'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -54,3 +55,17 @@ async function start() {
 }
 
 start()
+
+// Graceful shutdown: flush all in-progress game snapshots before exit so
+// minimal state is lost between server restarts.
+const handleShutdown = () => {
+  try {
+    lobbyManager.flushAllSnapshots()
+  } catch {
+    // Best-effort
+  }
+  process.exit(0)
+}
+
+process.on('SIGTERM', handleShutdown)
+process.on('SIGINT', handleShutdown)

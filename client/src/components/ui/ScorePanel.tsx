@@ -18,6 +18,7 @@ interface ScorePanelProps {
   playerNames: Record<string, string>
   currentPlayerId: string
   flashColors?: Set<Color>
+  forfeitedPlayerIds?: string[]
 }
 
 export default function ScorePanel({
@@ -27,6 +28,7 @@ export default function ScorePanel({
   playerNames,
   currentPlayerId,
   flashColors,
+  forfeitedPlayerIds = [],
 }: ScorePanelProps) {
   return (
     <>
@@ -38,19 +40,21 @@ export default function ScorePanel({
             const isMe = pid === myPlayerId
             const isCurrent = pid === currentPlayerId
             const name = playerNames[pid] ?? pid
+            const isForfeited = forfeitedPlayerIds.includes(pid)
 
             return (
               <div
                 key={pid}
                 className={`min-w-[25%] max-w-[50%] flex-1 flex flex-col gap-1 px-2 py-1 rounded-lg border ${
-                  isCurrent ? 'border-green-500/60 bg-[#1a1833]' : 'border-[#312e6b] bg-[#1a1833]'
-                } ${isCurrent ? 'opacity-100' : 'opacity-70'}`}
+                  isForfeited ? 'border-gray-700 opacity-40' : isCurrent ? 'border-green-500/60 bg-[#1a1833]' : 'border-[#312e6b] bg-[#1a1833]'
+                } ${isCurrent && !isForfeited ? 'opacity-100' : isForfeited ? 'opacity-40' : 'opacity-70'}`}
               >
                 <div className="flex items-center gap-1">
-                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
+                  {isCurrent && !isForfeited && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
                   <span className={`text-[10px] font-medium truncate max-w-[64px] ${isMe ? 'text-purple-300' : 'text-gray-300'}`}>
                     {name}{isMe ? ' ★' : ''}
                   </span>
+                  {isForfeited && <span className="text-[9px] text-red-400 ml-0.5">✕</span>}
                 </div>
                 <div className="flex gap-1">
                   {COLORS.map(color => {
@@ -93,16 +97,18 @@ export default function ScorePanel({
             const isMe = pid === myPlayerId
             const isCurrent = pid === currentPlayerId
             const name = playerNames[pid] ?? pid
+            const isForfeited = forfeitedPlayerIds.includes(pid)
 
             return (
-              <div key={pid} className={`${isCurrent ? 'opacity-100' : 'opacity-70'}`}>
+              <div key={pid} className={`${isCurrent && !isForfeited ? 'opacity-100' : isForfeited ? 'opacity-40' : 'opacity-70'}`}>
                 <div className="flex items-center gap-1 mb-1">
-                  {isCurrent && (
+                  {isCurrent && !isForfeited && (
                     <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />
                   )}
                   <span className={`text-xs font-medium ${isMe ? 'text-purple-300' : 'text-gray-300'}`}>
                     {name}{isMe ? ' (you)' : ''}
                   </span>
+                  {isForfeited && <span className="text-[10px] text-red-400 ml-0.5">(forfeited)</span>}
                 </div>
 
                 <div className="grid grid-cols-6 gap-0.5">

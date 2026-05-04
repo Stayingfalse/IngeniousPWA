@@ -24,7 +24,7 @@ import {
   emptyScores,
   minScore,
 } from '@ingenious/shared'
-import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys } from './database'
+import { gameResultQueries, lobbyQueries, pushSubscriptionQueries, playerQueries, vapidKeys, snapshotQueries } from './database'
 import { v4 as uuidv4 } from 'uuid'
 
 // Lazy-load web-push to avoid crashing if not installed
@@ -52,6 +52,13 @@ function sendPushNotification(
   }
 }
 
+export interface GameRoomSnapshot {
+  state: GameState
+  playerNames: Record<string, string>
+  turnLimitMs: number | null
+  pendingSwapPlayerId: string | null
+}
+
 export class GameRoom {
   private state: GameState
   private connections: Map<string, WebSocket> = new Map()
@@ -66,6 +73,8 @@ export class GameRoom {
   private pendingLastMove: LastMove | undefined = undefined
   // Pending swap: set after placement when rack lacks lowest-color tile
   private pendingSwapPlayerId: string | null = null
+  // Optional callback invoked after each state-changing move (used for snapshots)
+  onAfterMove: (() => void) | null = null
 
   constructor(
     lobbyId: string,
@@ -91,6 +100,39 @@ export class GameRoom {
 
     this.state = initGameState(lobbyId, playerIds, initialRacks, remaining)
     this.startTurnTimer()
+  }
+
+  /**
+   * Reconstruct a GameRoom from a persisted snapshot without re-initialising
+   * the game state (no new tiles drawn, no new player order).
+   */
+  static fromSnapshot(lobbyId: string, data: GameRoomSnapshot): GameRoom {
+    const room = Object.create(GameRoom.prototype) as GameRoom
+    room.lobbyId = lobbyId
+    room.turnLimitMs = data.turnLimitMs
+    room.state = { ...data.state, forfeitedPlayerIds: data.state.forfeitedPlayerIds ?? [] }
+    room.connections = new Map()
+    room.startedAt = Date.now()
+    room.playerNames = new Map(Object.entries(data.playerNames))
+    room.pendingLastMove = undefined
+    room.pendingSwapPlayerId = data.pendingSwapPlayerId
+    room.turnTimer = null
+    room.turnDeadline = null
+    room.onAfterMove = null
+    if (data.state.status === 'in_progress') {
+      room.startTurnTimer()
+    }
+    return room
+  }
+
+  /** Return a serialisable snapshot of the current game room state. */
+  getSnapshotData(): GameRoomSnapshot {
+    return {
+      state: this.state,
+      playerNames: Object.fromEntries(this.playerNames),
+      turnLimitMs: this.turnLimitMs,
+      pendingSwapPlayerId: this.pendingSwapPlayerId,
+    }
   }
 
   addConnection(playerId: string, ws: WebSocket): void {
@@ -236,6 +278,9 @@ export class GameRoom {
       this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
   }
 
   handleDeclineSwap(playerId: string): void {
@@ -256,6 +301,51 @@ export class GameRoom {
       this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
+  }
+
+  handleForfeit(playerId: string): void {
+    if (this.state.status !== 'in_progress') {
+      this.send(playerId, { type: 'ERROR', code: 'GAME_NOT_ACTIVE', message: 'Game is not active' })
+      return
+    }
+
+    const alreadyForfeited = (this.state.forfeitedPlayerIds ?? []).includes(playerId)
+    if (alreadyForfeited) return
+
+    // Mark as forfeited
+    const forfeitedPlayerIds = [...(this.state.forfeitedPlayerIds ?? []), playerId]
+    this.state = { ...this.state, forfeitedPlayerIds }
+
+    // Inform all connected players
+    this.broadcast({ type: 'PLAYER_FORFEITED', playerId })
+
+    // If only 1 active player remains they win by forfeit
+    const activePlayers = this.state.playerOrder.filter(p => !forfeitedPlayerIds.includes(p))
+    if (activePlayers.length <= 1) {
+      const winner = activePlayers[0] ?? null
+      this.finishGame(winner, 'forfeit')
+      return
+    }
+
+    // If the forfeiting player currently held the turn, advance past them
+    if (this.state.currentPlayerId === playerId) {
+      this.clearTurnTimer()
+      this.pendingSwapPlayerId = null
+      this.advanceTurn(playerId)
+      this.checkForNoMoves()
+      if (this.state.status === 'in_progress') {
+        this.startTurnTimer()
+        this.notifyCurrentPlayerIfOffline()
+      }
+    }
+
+    this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
   }
 
   private refillAndBroadcast(playerId: string, advanceTurn: boolean): void {
@@ -286,6 +376,9 @@ export class GameRoom {
         // Swap available — hold the turn, let the player decide
         this.pendingSwapPlayerId = playerId
         this.broadcastState()
+        if (this.state.status === 'in_progress') {
+          this.onAfterMove?.()
+        }
         return
       }
 
@@ -299,25 +392,39 @@ export class GameRoom {
       this.notifyCurrentPlayerIfOffline()
     }
     this.broadcastState()
+    if (this.state.status === 'in_progress') {
+      this.onAfterMove?.()
+    }
   }
 
   private advanceTurn(playerId: string): void {
-    const currentIndex = this.state.playerOrder.indexOf(playerId)
-    const nextIndex = (currentIndex + 1) % this.state.playerOrder.length
-    this.state = { ...this.state, currentPlayerId: this.state.playerOrder[nextIndex] }
+    const forfeited = new Set(this.state.forfeitedPlayerIds ?? [])
+    const order = this.state.playerOrder
+    const currentIndex = order.indexOf(playerId)
+    let nextIndex = (currentIndex + 1) % order.length
+    // Skip over any forfeited players
+    for (let i = 0; i < order.length; i++) {
+      if (!forfeited.has(order[nextIndex])) break
+      nextIndex = (nextIndex + 1) % order.length
+    }
+    this.state = { ...this.state, currentPlayerId: order[nextIndex] }
   }
 
   private checkForNoMoves(): void {
-    const totalPlayers = this.state.playerOrder.length
-    let skipped = 0
+    const forfeited = new Set(this.state.forfeitedPlayerIds ?? [])
+    const activePlayers = this.state.playerOrder.filter(p => !forfeited.has(p))
+    if (activePlayers.length === 0) return
 
-    while (skipped < totalPlayers && !hasLegalMove(this.state, this.state.currentPlayerId)) {
+    let skipped = 0
+    while (skipped < activePlayers.length && !hasLegalMove(this.state, this.state.currentPlayerId)) {
       skipped++
       this.advanceTurn(this.state.currentPlayerId)
     }
 
-    if (skipped >= totalPlayers) {
-      const winner = determineWinnerByScore(this.state)
+    if (skipped >= activePlayers.length) {
+      // Only active (non-forfeited) players are eligible to win
+      const filteredState = { ...this.state, playerOrder: activePlayers }
+      const winner = determineWinnerByScore(filteredState)
       this.finishGame(winner, 'no_moves')
     }
   }
@@ -384,7 +491,7 @@ export class GameRoom {
     }
   }
 
-  private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves'): void {
+  private finishGame(winner: string | null, reason: 'all_eighteen' | 'no_moves' | 'forfeit'): void {
     this.clearTurnTimer()
     this.state = { ...this.state, status: 'finished', winner }
 
@@ -396,7 +503,7 @@ export class GameRoom {
 
     this.broadcast({ type: 'GAME_OVER', results })
 
-    // Persist to DB
+    // Persist to DB and clean up snapshot
     try {
       const duration = Math.floor((Date.now() - this.startedAt) / 1000)
       gameResultQueries.insert.run(
@@ -408,6 +515,7 @@ export class GameRoom {
         duration,
       )
       lobbyQueries.setFinished.run('finished', this.lobbyId)
+      snapshotQueries.delete.run(this.lobbyId)
     } catch {
       // Non-critical DB write
     }
