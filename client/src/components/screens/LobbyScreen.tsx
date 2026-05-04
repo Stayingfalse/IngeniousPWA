@@ -16,6 +16,7 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
   const [nameInput, setNameInput] = useState('')
   const [nameError, setNameError] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const isHost = lobbyState?.hostId === myPlayerId
   const canStart = isHost && (lobbyState?.players.length ?? 0) >= 2
@@ -31,6 +32,7 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
 
   const handleDeleteLobby = async () => {
     if (!lobbyId) return
+    setDeleteError('')
     try {
       const res = await fetch(`/api/lobbies/${lobbyId}`, {
         method: 'DELETE',
@@ -38,9 +40,12 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
       })
       if (res.ok) {
         onNavigate('home')
+      } else {
+        const data = await res.json() as { error?: string }
+        setDeleteError(data.error || 'Failed to delete lobby')
       }
     } catch {
-      // Silently ignore
+      setDeleteError('Network error — please try again')
     }
     setDeleteConfirm(false)
   }
@@ -290,12 +295,15 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
           </button>
           {/* Delete lobby — host only, waiting lobbies */}
           {isHost && lobbyState?.status === 'waiting' && (
-            <button
-              className="w-full py-2 rounded-lg text-red-500 hover:text-red-400 transition-colors text-sm"
-              onClick={() => setDeleteConfirm(true)}
-            >
-              Delete Lobby
-            </button>
+            <>
+              {deleteError && <p className="text-red-400 text-xs text-center">{deleteError}</p>}
+              <button
+                className="w-full py-2 rounded-lg text-red-500 hover:text-red-400 transition-colors text-sm"
+                onClick={() => setDeleteConfirm(true)}
+              >
+                Delete Lobby
+              </button>
+            </>
           )}
         </div>
       </div>
