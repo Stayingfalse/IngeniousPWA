@@ -39,9 +39,9 @@ export default function ScorePanel({
   const isHost = myPlayerId === hostId
   return (
     <>
-      {/* Compact portrait layout: horizontal rows per player */}
+      {/* Compact portrait layout: horizontal rows per player, mini bar charts */}
       <div className="portrait:block landscape:hidden">
-        <div className="flex flex-row flex-wrap gap-2 py-1">
+        <div className="flex flex-row flex-wrap gap-1.5 py-1">
           {playerOrder.map(pid => {
             const playerScores = scores[pid] ?? {}
             const isMe = pid === myPlayerId
@@ -52,16 +52,16 @@ export default function ScorePanel({
             return (
               <div
                 key={pid}
-                className={`min-w-[25%] max-w-[50%] flex-1 flex flex-col gap-1 px-2 py-1 rounded-lg border ${
+                className={`min-w-[28%] flex-1 flex flex-col gap-1 px-1.5 py-1 rounded-lg border ${
                   isForfeited ? 'border-gray-700 opacity-40' : isCurrent ? 'border-green-500/60 bg-[#1a1833]' : 'border-[#312e6b] bg-[#1a1833]'
                 } ${isCurrent && !isForfeited ? 'opacity-100' : isForfeited ? 'opacity-40' : 'opacity-70'}`}
               >
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 min-w-0">
                   {isCurrent && !isForfeited && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />}
-                  <span className={`text-[10px] font-medium truncate max-w-[64px] ${isMe ? 'text-purple-300' : 'text-gray-300'}`}>
+                  <span className={`text-[10px] font-medium truncate flex-1 min-w-0 ${isMe ? 'text-purple-300' : 'text-gray-300'}`}>
                     {name}{isMe ? ' ★' : ''}
                   </span>
-                  {isForfeited && <span className="text-[9px] text-red-400 ml-0.5">✕</span>}
+                  {isForfeited && <span className="text-[9px] text-red-400 ml-0.5 flex-shrink-0">✕</span>}
                   {isHost && !isMe && !isForfeited && onKickPlayer && (
                     <button
                       onClick={() => onKickPlayer(pid)}
@@ -74,27 +74,25 @@ export default function ScorePanel({
                     </button>
                   )}
                 </div>
-                <div className="flex gap-1">
+                <div className="grid grid-cols-6 gap-0.5">
                   {COLORS.map(color => {
                     const score = playerScores[color] ?? 0
-                    const { bg, text } = COLOR_STYLES[color]
+                    const pct = Math.min(100, (score / 18) * 100)
+                    const { bg } = COLOR_STYLES[color]
                     const isFlashing = flashColors?.has(color) ?? false
                     return (
-                      <div
-                        key={color}
-                        className="flex flex-col items-center"
-                        style={{ minWidth: 18 }}
-                      >
-                        <div
-                          className="w-4 h-4 rounded-sm flex items-center justify-center text-[9px] font-bold"
-                          style={{
-                            backgroundColor: bg,
-                            color: text,
-                            animation: isFlashing ? 'score-flash 600ms ease-out 1200ms both' : undefined,
-                          }}
-                        >
-                          {score}
+                      <div key={color} className="flex flex-col items-center gap-0.5">
+                        <div className="w-full h-6 bg-[#0f0e17] rounded-sm relative overflow-hidden">
+                          <div
+                            className="absolute bottom-0 w-full rounded-sm transition-all duration-500"
+                            style={{
+                              height: `${pct}%`,
+                              backgroundColor: bg,
+                              animation: isFlashing ? 'score-flash 600ms ease-out 1200ms both' : undefined,
+                            }}
+                          />
                         </div>
+                        <span className="text-[8px] text-gray-400 leading-none">{score}</span>
                       </div>
                     )
                   })}
