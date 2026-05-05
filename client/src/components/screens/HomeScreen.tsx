@@ -4,6 +4,7 @@ import { useLobbyStore } from '../../store/lobbyStore'
 import IngeniousBanner from '../ui/IngeniousBanner'
 import HowToPlayModal from '../ui/HowToPlayModal'
 import StatsPanel from '../ui/StatsPanel'
+import GameHistoryPanel from '../ui/GameHistoryPanel'
 import type { TurnMode, AiDifficulty, ActiveGameSummary, OpenLobbySummary } from '@ingenious/shared'
 
 const TIMER_PRESETS: { label: string; seconds: number }[] = [
@@ -263,6 +264,8 @@ export default function HomeScreen({
           </div>
         </div>
       )}
+
+      <GameHistoryPanel playerId={playerId ?? null} />
 
       <div className="bg-[#1a1833] rounded-2xl p-6 w-full max-w-sm shadow-xl border border-[#312e6b]">
         <div className="mb-4">

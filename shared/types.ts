@@ -117,6 +117,20 @@ export type GlobalStats = {
   aiTotalHard: number
 }
 
+export type PlayerHistoryEntry = {
+  id: string
+  lobbyId: string
+  won: boolean
+  winnerName: string | null
+  winReason: 'all_eighteen' | 'no_moves' | 'forfeit' | null
+  opponentNames: string[]
+  moveCount: number
+  durationSeconds: number
+  finishedAt: number
+  turnMode: TurnMode | null
+  aiDifficulty: AiDifficulty | null
+}
+
 export type ClientMessage =
   | { type: 'JOIN_LOBBY'; lobbyId: string; playerName: string }
   | { type: 'START_GAME' }

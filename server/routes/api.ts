@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries, playerStreakQueries, playerOpponentQueries } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries, playerStreakQueries, playerOpponentQueries, playerHistoryQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
-import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats, OpenLobbySummary } from '@ingenious/shared'
+import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats, OpenLobbySummary, PlayerHistoryEntry } from '@ingenious/shared'
 import db from '../services/database'
 
 // Valid real-time turn timer presets (seconds). null = async/turn-based.
@@ -313,6 +313,47 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       aiTotalHard: row?.total_vs_hard ?? 0,
     }
     return reply.send({ stats })
+  })
+
+  // Player game history (30 per minute per IP)
+  fastify.get('/api/player/history', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const rows = playerHistoryQueries.getForPlayer.all(player.id)
+    const history: PlayerHistoryEntry[] = rows.map(r => {
+      const rawReason = r.win_reason
+      const winReason: PlayerHistoryEntry['winReason'] =
+        rawReason === 'all_eighteen' || rawReason === 'no_moves' || rawReason === 'forfeit'
+          ? rawReason
+          : null
+      const rawMode = r.turn_mode
+      const turnMode: PlayerHistoryEntry['turnMode'] =
+        rawMode === 'async' ? 'async' : rawMode === 'realtime' ? 'realtime' : null
+      const rawDiff = r.ai_difficulty
+      const aiDifficulty: PlayerHistoryEntry['aiDifficulty'] =
+        rawDiff === 'easy' || rawDiff === 'medium' || rawDiff === 'hard' ? rawDiff : null
+      return {
+        id: r.id,
+        lobbyId: r.lobby_id,
+        won: r.winner_id === player.id,
+        winnerName: r.winner_name ?? null,
+        winReason,
+        opponentNames: r.opponent_names ? r.opponent_names.split(',').filter(Boolean) : [],
+        moveCount: r.move_count,
+        durationSeconds: r.duration_seconds,
+        finishedAt: r.finished_at,
+        turnMode,
+        aiDifficulty,
+      }
+    })
+
+    return reply.send({ history })
   })
 
   // Health check

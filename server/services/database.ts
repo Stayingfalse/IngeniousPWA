@@ -380,4 +380,46 @@ export const globalStatQueries = {
   ),
 }
 
+export interface PlayerHistoryRow {
+  id: string
+  lobby_id: string
+  winner_id: string | null
+  winner_name: string | null
+  move_count: number
+  duration_seconds: number
+  finished_at: number
+  win_reason: string | null
+  turn_mode: string | null
+  ai_difficulty: string | null
+  opponent_names: string | null
+}
+
+export const playerHistoryQueries = {
+  getForPlayer: db.prepare<[string], PlayerHistoryRow>(
+    `SELECT
+       gr.id,
+       gr.lobby_id,
+       gr.winner_id,
+       winner_p.display_name AS winner_name,
+       gr.move_count,
+       gr.duration_seconds,
+       gr.finished_at,
+       gr.win_reason,
+       l.turn_mode,
+       l.ai_difficulty,
+       GROUP_CONCAT(
+         CASE WHEN lp2.player_id != ?1 THEN COALESCE(p2.display_name, 'Unknown') END
+       ) AS opponent_names
+     FROM game_results gr
+     JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id AND lp.player_id = ?1
+     LEFT JOIN players winner_p ON winner_p.id = gr.winner_id
+     LEFT JOIN lobbies l ON l.id = gr.lobby_id
+     LEFT JOIN lobby_players lp2 ON lp2.lobby_id = gr.lobby_id
+     LEFT JOIN players p2 ON p2.id = lp2.player_id
+     GROUP BY gr.id
+     ORDER BY gr.finished_at DESC
+     LIMIT 50`,
+  ),
+}
+
 export default db
