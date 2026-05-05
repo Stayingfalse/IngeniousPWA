@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries, playerStreakQueries, playerOpponentQueries, playerHistoryQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
-import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats, OpenLobbySummary } from '@ingenious/shared'
+import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats, OpenLobbySummary, PlayerHistoryEntry } from '@ingenious/shared'
 import db from '../services/database'
 
 // Valid real-time turn timer presets (seconds). null = async/turn-based.
@@ -260,11 +260,34 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const player = playerQueries.findByToken.get(token)
     if (!player) return reply.status(401).send({ error: 'Unauthorized' })
 
-    const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id)
+    const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id, player.id)
+
+    // Compute win streak from ordered results (single forward pass)
+    const resultRows = playerStreakQueries.getResults.all(player.id)
+    let streak = 0
+    let bestWinStreak = 0
+    for (const r of resultRows) {
+      if (r.winner_id === player.id) {
+        streak++
+        if (streak > bestWinStreak) bestWinStreak = streak
+      } else {
+        streak = 0
+      }
+    }
+    // After the forward pass, 'streak' is the current run of wins at the end
+    const currentWinStreak = streak
+
+    const opponentRow = playerOpponentQueries.getMostCommon.get(player.id)
+
     const stats: PlayerStats = {
       gamesPlayed: row?.games_played ?? 0,
       gamesWon: row?.games_won ?? 0,
       uniqueOpponents: row?.unique_opponents ?? 0,
+      vsComputerGames: row?.vs_computer_games ?? 0,
+      currentWinStreak,
+      bestWinStreak,
+      mostCommonOpponentName: opponentRow?.name ?? null,
+      mostCommonOpponentGames: opponentRow?.games ?? 0,
     }
     return reply.send({ stats })
   })
@@ -278,11 +301,59 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       totalGames: row?.total_games ?? 0,
       realtimeGames: row?.realtime_games ?? 0,
       asyncGames: row?.async_games ?? 0,
+      vsComputerGames: row?.vs_computer_games ?? 0,
       wonByAllEighteen: row?.won_by_all_eighteen ?? 0,
       wonByNoMoves: row?.won_by_no_moves ?? 0,
       wonByForfeit: row?.won_by_forfeit ?? 0,
+      aiWinsEasy: row?.wins_vs_easy ?? 0,
+      aiTotalEasy: row?.total_vs_easy ?? 0,
+      aiWinsMedium: row?.wins_vs_medium ?? 0,
+      aiTotalMedium: row?.total_vs_medium ?? 0,
+      aiWinsHard: row?.wins_vs_hard ?? 0,
+      aiTotalHard: row?.total_vs_hard ?? 0,
     }
     return reply.send({ stats })
+  })
+
+  // Player game history (30 per minute per IP)
+  fastify.get('/api/player/history', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
+    const token = (request.cookies as Record<string, string | undefined>)['player_token']
+    if (!token) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const player = playerQueries.findByToken.get(token)
+    if (!player) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const rows = playerHistoryQueries.getForPlayer.all(player.id)
+    const history: PlayerHistoryEntry[] = rows.map(r => {
+      const rawReason = r.win_reason
+      const winReason: PlayerHistoryEntry['winReason'] =
+        rawReason === 'all_eighteen' || rawReason === 'no_moves' || rawReason === 'forfeit'
+          ? rawReason
+          : null
+      const rawMode = r.turn_mode
+      const turnMode: PlayerHistoryEntry['turnMode'] =
+        rawMode === 'async' ? 'async' : rawMode === 'realtime' ? 'realtime' : null
+      const rawDiff = r.ai_difficulty
+      const aiDifficulty: PlayerHistoryEntry['aiDifficulty'] =
+        rawDiff === 'easy' || rawDiff === 'medium' || rawDiff === 'hard' ? rawDiff : null
+      return {
+        id: r.id,
+        lobbyId: r.lobby_id,
+        won: r.winner_id === player.id,
+        winnerName: r.winner_name ?? null,
+        winReason,
+        opponentNames: r.opponent_names ? r.opponent_names.split(',').map(s => s.trim()).filter(s => s.length > 0) : [],
+        moveCount: r.move_count,
+        durationSeconds: r.duration_seconds,
+        finishedAt: r.finished_at,
+        turnMode,
+        aiDifficulty,
+      }
+    })
+
+    return reply.send({ history })
   })
 
   // Health check

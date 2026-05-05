@@ -74,6 +74,7 @@ const migrations = [
   'ALTER TABLE lobbies ADD COLUMN turn_limit_seconds INTEGER',
   'ALTER TABLE game_results ADD COLUMN win_reason TEXT',
   'ALTER TABLE lobbies ADD COLUMN auto_start INTEGER DEFAULT 0',
+  'ALTER TABLE lobbies ADD COLUMN ai_difficulty TEXT',
 ]
 for (const sql of migrations) {
   try {
@@ -146,6 +147,7 @@ export interface LobbyRow {
   turn_mode: string | null
   turn_limit_seconds: number | null
   auto_start: number | null
+  ai_difficulty: string | null
 }
 
 export interface LobbyPlayerRow {
@@ -173,7 +175,7 @@ export const playerQueries = {
 
 export const lobbyQueries = {
   findById: db.prepare<[string], LobbyRow>('SELECT * FROM lobbies WHERE id = ?'),
-  insert: db.prepare('INSERT INTO lobbies (id, status, player_count, host_id, turn_mode, turn_limit_seconds, auto_start) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+  insert: db.prepare('INSERT INTO lobbies (id, status, player_count, host_id, turn_mode, turn_limit_seconds, auto_start, ai_difficulty) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
   updateStatus: db.prepare('UPDATE lobbies SET status = ? WHERE id = ?'),
   setStarted: db.prepare('UPDATE lobbies SET status = ?, started_at = unixepoch() WHERE id = ?'),
   setFinished: db.prepare('UPDATE lobbies SET status = ?, finished_at = unixepoch() WHERE id = ?'),
@@ -279,10 +281,11 @@ export interface PlayerStatRow {
   games_played: number
   games_won: number
   unique_opponents: number
+  vs_computer_games: number
 }
 
 export const playerStatQueries = {
-  getForPlayer: db.prepare<[string, string, string], PlayerStatRow>(
+  getForPlayer: db.prepare<[string, string, string, string], PlayerStatRow>(
     `SELECT
        (SELECT COUNT(*) FROM game_results gr
         JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id
@@ -292,7 +295,48 @@ export const playerStatQueries = {
         FROM lobby_players lp1
         JOIN lobby_players lp2 ON lp2.lobby_id = lp1.lobby_id AND lp2.player_id != lp1.player_id
         JOIN game_results gr ON gr.lobby_id = lp1.lobby_id
-        WHERE lp1.player_id = ?) AS unique_opponents`,
+        WHERE lp1.player_id = ?) AS unique_opponents,
+       (SELECT COUNT(*) FROM game_results gr
+        JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id
+        WHERE lp.player_id = ?
+          AND EXISTS (
+            SELECT 1 FROM lobby_players lp_ai
+            WHERE lp_ai.lobby_id = gr.lobby_id AND lp_ai.player_id = 'ai-computer-player'
+          )) AS vs_computer_games`,
+  ),
+}
+
+export interface PlayerGameResultRow {
+  winner_id: string | null
+}
+
+export const playerStreakQueries = {
+  getResults: db.prepare<[string], PlayerGameResultRow>(
+    `SELECT gr.winner_id
+     FROM game_results gr
+     JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id
+     WHERE lp.player_id = ?
+     ORDER BY gr.finished_at ASC`,
+  ),
+}
+
+export interface MostCommonOpponentRow {
+  name: string
+  games: number
+}
+
+export const playerOpponentQueries = {
+  getMostCommon: db.prepare<[string], MostCommonOpponentRow>(
+    `SELECT p.display_name as name, COUNT(*) as games
+     FROM lobby_players lp1
+     JOIN lobby_players lp2 ON lp2.lobby_id = lp1.lobby_id AND lp2.player_id != lp1.player_id
+     JOIN players p ON p.id = lp2.player_id
+     JOIN game_results gr ON gr.lobby_id = lp1.lobby_id
+     WHERE lp1.player_id = ?
+       AND lp2.player_id != 'ai-computer-player'
+     GROUP BY lp2.player_id
+     ORDER BY games DESC
+     LIMIT 1`,
   ),
 }
 
@@ -300,9 +344,16 @@ export interface GlobalStatRow {
   total_games: number
   realtime_games: number
   async_games: number
+  vs_computer_games: number
   won_by_all_eighteen: number
   won_by_no_moves: number
   won_by_forfeit: number
+  wins_vs_easy: number
+  total_vs_easy: number
+  wins_vs_medium: number
+  total_vs_medium: number
+  wins_vs_hard: number
+  total_vs_hard: number
 }
 
 export const globalStatQueries = {
@@ -311,11 +362,63 @@ export const globalStatQueries = {
        COUNT(*) AS total_games,
        SUM(CASE WHEN COALESCE(l.turn_mode, 'realtime') = 'realtime' THEN 1 ELSE 0 END) AS realtime_games,
        SUM(CASE WHEN l.turn_mode = 'async' THEN 1 ELSE 0 END) AS async_games,
+       SUM(CASE WHEN EXISTS (
+         SELECT 1 FROM lobby_players lp_ai
+         WHERE lp_ai.lobby_id = gr.lobby_id AND lp_ai.player_id = 'ai-computer-player'
+       ) THEN 1 ELSE 0 END) AS vs_computer_games,
        SUM(CASE WHEN gr.win_reason = 'all_eighteen' THEN 1 ELSE 0 END) AS won_by_all_eighteen,
        SUM(CASE WHEN gr.win_reason = 'no_moves' THEN 1 ELSE 0 END) AS won_by_no_moves,
-       SUM(CASE WHEN gr.win_reason = 'forfeit' THEN 1 ELSE 0 END) AS won_by_forfeit
+       SUM(CASE WHEN gr.win_reason = 'forfeit' THEN 1 ELSE 0 END) AS won_by_forfeit,
+       SUM(CASE WHEN l.ai_difficulty = 'easy' AND gr.winner_id != 'ai-computer-player' AND gr.winner_id IS NOT NULL THEN 1 ELSE 0 END) AS wins_vs_easy,
+       SUM(CASE WHEN l.ai_difficulty = 'easy' THEN 1 ELSE 0 END) AS total_vs_easy,
+       SUM(CASE WHEN l.ai_difficulty = 'medium' AND gr.winner_id != 'ai-computer-player' AND gr.winner_id IS NOT NULL THEN 1 ELSE 0 END) AS wins_vs_medium,
+       SUM(CASE WHEN l.ai_difficulty = 'medium' THEN 1 ELSE 0 END) AS total_vs_medium,
+       SUM(CASE WHEN l.ai_difficulty = 'hard' AND gr.winner_id != 'ai-computer-player' AND gr.winner_id IS NOT NULL THEN 1 ELSE 0 END) AS wins_vs_hard,
+       SUM(CASE WHEN l.ai_difficulty = 'hard' THEN 1 ELSE 0 END) AS total_vs_hard
      FROM game_results gr
      LEFT JOIN lobbies l ON l.id = gr.lobby_id`,
+  ),
+}
+
+export interface PlayerHistoryRow {
+  id: string
+  lobby_id: string
+  winner_id: string | null
+  winner_name: string | null
+  move_count: number
+  duration_seconds: number
+  finished_at: number
+  win_reason: string | null
+  turn_mode: string | null
+  ai_difficulty: string | null
+  opponent_names: string | null
+}
+
+export const playerHistoryQueries = {
+  getForPlayer: db.prepare<[string], PlayerHistoryRow>(
+    `SELECT
+       gr.id,
+       gr.lobby_id,
+       gr.winner_id,
+       winner_p.display_name AS winner_name,
+       gr.move_count,
+       gr.duration_seconds,
+       gr.finished_at,
+       gr.win_reason,
+       l.turn_mode,
+       l.ai_difficulty,
+       GROUP_CONCAT(
+         CASE WHEN lp2.player_id != ?1 THEN COALESCE(p2.display_name, 'Unknown') END
+       ) AS opponent_names
+     FROM game_results gr
+     JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id AND lp.player_id = ?1
+     LEFT JOIN players winner_p ON winner_p.id = gr.winner_id
+     LEFT JOIN lobbies l ON l.id = gr.lobby_id
+     LEFT JOIN lobby_players lp2 ON lp2.lobby_id = gr.lobby_id
+     LEFT JOIN players p2 ON p2.id = lp2.player_id
+     GROUP BY gr.id
+     ORDER BY gr.finished_at DESC
+     LIMIT 50`,
   ),
 }
 

@@ -94,15 +94,41 @@ export type PlayerStats = {
   gamesPlayed: number
   gamesWon: number
   uniqueOpponents: number
+  vsComputerGames: number
+  currentWinStreak: number
+  bestWinStreak: number
+  mostCommonOpponentName: string | null
+  mostCommonOpponentGames: number
 }
 
 export type GlobalStats = {
   totalGames: number
   realtimeGames: number
   asyncGames: number
+  vsComputerGames: number
   wonByAllEighteen: number
   wonByNoMoves: number
   wonByForfeit: number
+  aiWinsEasy: number
+  aiTotalEasy: number
+  aiWinsMedium: number
+  aiTotalMedium: number
+  aiWinsHard: number
+  aiTotalHard: number
+}
+
+export type PlayerHistoryEntry = {
+  id: string
+  lobbyId: string
+  won: boolean
+  winnerName: string | null
+  winReason: 'all_eighteen' | 'no_moves' | 'forfeit' | null
+  opponentNames: string[]
+  moveCount: number
+  durationSeconds: number
+  finishedAt: number
+  turnMode: TurnMode | null
+  aiDifficulty: AiDifficulty | null
 }
 
 export type ClientMessage =

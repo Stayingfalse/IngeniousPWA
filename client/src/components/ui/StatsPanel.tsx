@@ -26,6 +26,29 @@ function StatBar({ label, value, max, color }: StatBarProps) {
   )
 }
 
+function winPct(wins: number, total: number): string {
+  if (total === 0) return '–'
+  return `${Math.round((wins / total) * 100)}%`
+}
+
+interface AiDifficultyRowProps {
+  label: string
+  wins: number
+  total: number
+}
+
+function AiDifficultyRow({ label, wins, total }: AiDifficultyRowProps) {
+  if (total === 0) return null
+  return (
+    <div className="flex justify-between text-xs text-gray-400">
+      <span>{label}</span>
+      <span className="font-mono text-white">
+        {winPct(wins, total)} <span className="text-gray-500">({total}g)</span>
+      </span>
+    </div>
+  )
+}
+
 export default function StatsPanel({ playerId }: { playerId: string | null }) {
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null)
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null)
@@ -92,6 +115,18 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
             </div>
           </div>
 
+          {/* Streak row */}
+          {playerStats.bestWinStreak > 0 && (
+            <div className="flex justify-center gap-4 mt-2 text-xs">
+              {playerStats.currentWinStreak > 0 ? (
+                <span className="text-orange-400">🔥 {playerStats.currentWinStreak} win streak</span>
+              ) : (
+                <span className="text-gray-500">No active streak</span>
+              )}
+              <span className="text-gray-500">best: {playerStats.bestWinStreak}</span>
+            </div>
+          )}
+
           {expanded && (
             <div className="mt-4 space-y-2 border-t border-[#312e6b] pt-3">
               <StatBar
@@ -100,16 +135,44 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
                 max={playerStats.gamesPlayed}
                 color="bg-green-500"
               />
+              {playerStats.mostCommonOpponentName && (
+                <p className="text-xs text-gray-400 pt-1">
+                  🏆 Most vs <span className="text-white font-semibold">{playerStats.mostCommonOpponentName}</span>
+                  <span className="text-gray-500"> ({playerStats.mostCommonOpponentGames} games)</span>
+                </p>
+              )}
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Opponents</p>
+              <StatBar
+                label="🤖 vs Computer"
+                value={playerStats.vsComputerGames}
+                max={playerStats.gamesPlayed}
+                color="bg-cyan-500"
+              />
+              <StatBar
+                label="👤 vs Humans"
+                value={playerStats.gamesPlayed - playerStats.vsComputerGames}
+                max={playerStats.gamesPlayed}
+                color="bg-purple-500"
+              />
               {globalStats && globalStats.totalGames > 0 && (
                 <>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Global</p>
-                  <StatBar label="All games" value={globalStats.totalGames} max={globalStats.totalGames} color="bg-purple-500" />
+                  <StatBar label="🤖 vs Computer" value={globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-cyan-500" />
+                  <StatBar label="👤 vs Humans" value={globalStats.totalGames - globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-purple-500" />
                   <StatBar label="⚡ Real-time" value={globalStats.realtimeGames} max={globalStats.totalGames} color="bg-blue-500" />
                   <StatBar label="☁ Turn-based" value={globalStats.asyncGames} max={globalStats.totalGames} color="bg-indigo-400" />
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">How games end</p>
                   <StatBar label="🏆 All 18s" value={globalStats.wonByAllEighteen} max={globalStats.totalGames} color="bg-yellow-500" />
                   <StatBar label="🪨 No moves left" value={globalStats.wonByNoMoves} max={globalStats.totalGames} color="bg-orange-500" />
                   <StatBar label="🏳 Forfeit" value={globalStats.wonByForfeit} max={globalStats.totalGames} color="bg-red-500" />
+                  {(globalStats.aiTotalEasy + globalStats.aiTotalMedium + globalStats.aiTotalHard) > 0 && (
+                    <>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Win % vs AI difficulty</p>
+                      <AiDifficultyRow label="😊 Easy" wins={globalStats.aiWinsEasy} total={globalStats.aiTotalEasy} />
+                      <AiDifficultyRow label="🤔 Medium" wins={globalStats.aiWinsMedium} total={globalStats.aiTotalMedium} />
+                      <AiDifficultyRow label="😤 Hard" wins={globalStats.aiWinsHard} total={globalStats.aiTotalHard} />
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -123,21 +186,31 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
               <div className="text-xs text-gray-400">Games</div>
             </div>
             <div>
-              <div className="text-xl font-bold text-blue-400">{globalStats.realtimeGames}</div>
-              <div className="text-xs text-gray-400">⚡ Real-time</div>
+              <div className="text-xl font-bold text-cyan-400">{globalStats.vsComputerGames}</div>
+              <div className="text-xs text-gray-400">🤖 vs Computer</div>
             </div>
             <div>
-              <div className="text-xl font-bold text-indigo-400">{globalStats.asyncGames}</div>
-              <div className="text-xs text-gray-400">☁ Turn-based</div>
+              <div className="text-xl font-bold text-purple-400">{globalStats.totalGames - globalStats.vsComputerGames}</div>
+              <div className="text-xs text-gray-400">👤 vs Humans</div>
             </div>
           </div>
 
           {expanded && (
             <div className="space-y-2 border-t border-[#312e6b] pt-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">How games end</p>
+              <StatBar label="⚡ Real-time" value={globalStats.realtimeGames} max={globalStats.totalGames} color="bg-blue-500" />
+              <StatBar label="☁ Turn-based" value={globalStats.asyncGames} max={globalStats.totalGames} color="bg-indigo-400" />
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">How games end</p>
               <StatBar label="🏆 All 18s" value={globalStats.wonByAllEighteen} max={globalStats.totalGames} color="bg-yellow-500" />
               <StatBar label="🪨 No moves left" value={globalStats.wonByNoMoves} max={globalStats.totalGames} color="bg-orange-500" />
               <StatBar label="🏳 Forfeit" value={globalStats.wonByForfeit} max={globalStats.totalGames} color="bg-red-500" />
+              {(globalStats.aiTotalEasy + globalStats.aiTotalMedium + globalStats.aiTotalHard) > 0 && (
+                <>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Win % vs AI difficulty</p>
+                  <AiDifficultyRow label="😊 Easy" wins={globalStats.aiWinsEasy} total={globalStats.aiTotalEasy} />
+                  <AiDifficultyRow label="🤔 Medium" wins={globalStats.aiWinsMedium} total={globalStats.aiTotalMedium} />
+                  <AiDifficultyRow label="😤 Hard" wins={globalStats.aiWinsHard} total={globalStats.aiTotalHard} />
+                </>
+              )}
             </div>
           )}
         </div>

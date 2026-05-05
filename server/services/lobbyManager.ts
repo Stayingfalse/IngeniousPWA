@@ -105,7 +105,7 @@ export class LobbyManager {
     this.lobbies.set(id, lobby)
 
     try {
-      lobbyQueries.insert.run(id, 'waiting', maxPlayers, null, turnMode, turnLimitSeconds, autoStart ? 1 : 0)
+      lobbyQueries.insert.run(id, 'waiting', maxPlayers, null, turnMode, turnLimitSeconds, autoStart ? 1 : 0, vsAI ? aiDifficulty : null)
     } catch {
       // Non-critical
     }
