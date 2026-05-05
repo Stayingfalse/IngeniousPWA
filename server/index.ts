@@ -13,6 +13,7 @@ import { buildOgMeta, buildDefaultOgMeta, renderOgTags } from './lib/ogEmbed'
 const PORT = parseInt(process.env.PORT || '3000', 10)
 const HOST = process.env.HOST || '0.0.0.0'
 const CLIENT_DIST = process.env.CLIENT_DIST || path.join(__dirname, '..', '..', 'client', 'dist')
+const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').replace(/\/$/, '')
 
 const fastify = Fastify({
   logger: {
@@ -40,19 +41,22 @@ async function start() {
       prefix: '/',
     })
 
+    // Cache index.html once at startup; it only changes on redeployment.
+    const indexPath = path.join(CLIENT_DIST, 'index.html')
+    const indexTemplate = fs.readFileSync(indexPath, 'utf-8')
+
     // SPA fallback — inject OG meta tags when a ?join= code is present so that
     // social-media crawlers (Discord, Slack, Twitter, etc.) receive rich embeds.
     fastify.setNotFoundHandler((request, reply) => {
-      const indexPath = path.join(CLIENT_DIST, 'index.html')
-      let html = fs.readFileSync(indexPath, 'utf-8')
-
       const reqUrl = request.url ?? '/'
       const qIdx = reqUrl.indexOf('?')
       const qs = qIdx >= 0 ? reqUrl.slice(qIdx + 1) : ''
       const params = new URLSearchParams(qs)
-      const joinCode = params.get('join')
+      const rawJoinCode = params.get('join') ?? ''
+      // Lobby codes are exactly 6 uppercase alphanumeric characters; skip DB
+      // lookups for anything that doesn't match this shape.
+      const joinCode = /^[A-Z0-9]{6}$/i.test(rawJoinCode) ? rawJoinCode : ''
 
-      const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').replace(/\/$/, '')
       const pageUrl = PUBLIC_URL + reqUrl
 
       const meta = joinCode
@@ -61,7 +65,7 @@ async function start() {
 
       const ogTags = renderOgTags(meta, pageUrl)
       // Inject immediately before </head> so they override any static defaults
-      html = html.replace('</head>', `    ${ogTags}\n  </head>`)
+      const html = indexTemplate.replace('</head>', `    ${ogTags}\n  </head>`)
 
       reply.type('text/html').send(html)
     })
