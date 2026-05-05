@@ -157,17 +157,18 @@ export default function App() {
 
   const { connected } = useWebSocket(handleMessage, authReady)
 
-  // Capture ?join= URL param on first mount so we can auto-navigate once connected.
+  // Capture ?join= or /<CODE> URL param on first mount so we can auto-navigate once connected.
   // We clear it from the URL immediately to prevent HomeScreen from also reading it.
   const pendingJoinFromUrlRef = useRef<string | null>(null)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const pendingLobbyId = params.get('join')
+    const queryCode = params.get('join')
+    const pathMatch = /^\/([A-Z0-9]{6})$/i.exec(window.location.pathname)
+    const pendingLobbyId = queryCode ?? pathMatch?.[1] ?? null
     if (pendingLobbyId) {
       pendingJoinFromUrlRef.current = pendingLobbyId.toUpperCase().trim()
-      const url = new URL(window.location.href)
-      url.searchParams.delete('join')
-      window.history.replaceState(null, '', url.toString())
+      // Normalise the URL back to '/' so the address bar is clean
+      window.history.replaceState(null, '', '/')
     }
   }, [])
 

@@ -47,7 +47,7 @@ export function notifyPlayerTurnIfOffline(args: {
       {
         title: 'Ingenious – Your Turn!',
         body: `${args.playerDisplayName}, it's your turn in game ${args.lobbyId}.`,
-        url: `/?join=${args.lobbyId}`,
+        url: `/${args.lobbyId}`,
       },
     )
   } catch {

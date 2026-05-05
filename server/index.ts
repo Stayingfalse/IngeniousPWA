@@ -46,9 +46,18 @@ async function start() {
       const qs = qIdx >= 0 ? reqUrl.slice(qIdx + 1) : ''
       const params = new URLSearchParams(qs)
       const rawJoinCode = params.get('join') ?? ''
+
+      // Also accept the lobby code as a clean path segment: /ELCCQP
+      const pathname = reqUrl.split('?')[0]
+      const pathCode = /^\/([A-Z0-9]{6})$/i.exec(pathname)?.[1] ?? ''
+
       // Lobby codes are exactly 6 uppercase alphanumeric characters; skip DB
       // lookups for anything that doesn't match this shape.
-      const joinCode = /^[A-Z0-9]{6}$/i.test(rawJoinCode) ? rawJoinCode : ''
+      const joinCode = /^[A-Z0-9]{6}$/i.test(rawJoinCode)
+        ? rawJoinCode
+        : /^[A-Z0-9]{6}$/i.test(pathCode)
+          ? pathCode
+          : ''
 
       const pageUrl = PUBLIC_URL + reqUrl
 

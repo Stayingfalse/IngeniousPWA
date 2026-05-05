@@ -45,13 +45,13 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     if (result) {
       const winner = result.winner_name ?? 'Someone'
       return {
-        title: `Game Over — ${winner} wins! | Ingenious`,
-        description: `This game has ended after ${result.move_count ?? '?'} moves. Why not start your own?`,
+        title: `🏆 ${escapeHtml(winner)} just won an Ingenious game!`,
+        description: `This game has ended after ${result.move_count ?? '?'} moves. Start your own and challenge a friend!`,
         imageUrl: iconUrl,
       }
     }
     return {
-      title: 'Ingenious — Multiplayer Hex Board Game',
+      title: '🎲 Ingenious — Multiplayer Hex Board Game',
       description: 'This game link has expired or is invalid. Create your own lobby and challenge your friends!',
       imageUrl: iconUrl,
     }
@@ -67,11 +67,13 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
   if (lobby.status === 'waiting') {
     const host = lobby.players.find(p => p.id === lobby.hostId)
     const hostName = host?.name ?? 'Someone'
-    const slots = `${lobby.players.filter(p => p.id !== AI_PLAYER_ID).length}/${lobby.maxPlayers}`
-    const joined = playerNames.length > 0 ? `Players: ${playerNames.join(', ')}` : 'No players yet'
+    const filled = lobby.players.filter(p => p.id !== AI_PLAYER_ID).length
+    const slots = `${filled}/${lobby.maxPlayers}`
+    const spotsLeft = lobby.maxPlayers - filled
+    const urgency = spotsLeft === 1 ? '1 spot left!' : `${spotsLeft} spots left`
     return {
-      title: `Join ${hostName}'s Ingenious game!`,
-      description: `${modeLabel} · ${slots} players · ${joined}`,
+      title: `🎯 Join ${escapeHtml(hostName)}'s Ingenious game!`,
+      description: `${modeLabel} · ${slots} players · ${urgency} — tap to join now`,
       imageUrl: iconUrl,
     }
   }
@@ -86,8 +88,8 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
         return s ? `${p.name}: ${formatScores(s)}` : p.name
       })
     return {
-      title: 'Ingenious game in progress — join as a spectator!',
-      description: `${modeLabel} · Playing: ${playerNames.join(' vs ')} · ${scoreLines.join(' | ')}`,
+      title: `🔥 Ingenious in progress — spectate now!`,
+      description: `${modeLabel} · ${playerNames.join(' vs ')} · ${scoreLines.join(' | ')}`,
       imageUrl: iconUrl,
     }
   }
@@ -97,8 +99,8 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     const result = gameResultQueries.findByLobby.get(code)
     const winner = result?.winner_name ?? 'Someone'
     return {
-      title: `Game Over — ${winner} wins! | Ingenious`,
-      description: `${modeLabel} · ${playerNames.join(' vs ')} · This game has ended. Start your own!`,
+      title: `🏆 ${escapeHtml(winner)} just won an Ingenious game!`,
+      description: `${modeLabel} · ${playerNames.join(' vs ')} · Can you beat them? Play now →`,
       imageUrl: iconUrl,
     }
   }
@@ -109,8 +111,8 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
 
 export function buildDefaultOgMeta(baseUrl: string): OgMeta {
   return {
-    title: 'Ingenious — Multiplayer Hex Board Game',
-    description: 'Challenge friends to a strategic hex tile game. Create a lobby and share the link!',
+    title: '🎲 Ingenious — Multiplayer Hex Board Game',
+    description: 'Play Ingenious free — strategic hex tile fun with friends. Create a lobby in seconds!',
     imageUrl: `${baseUrl}/icon-512.png`,
   }
 }
@@ -127,10 +129,14 @@ export function renderOgTags(meta: OgMeta, pageUrl: string): string {
     `<meta property="og:title" content="${t}" />`,
     `<meta property="og:description" content="${d}" />`,
     `<meta property="og:image" content="${img}" />`,
+    `<meta property="og:image:width" content="512" />`,
+    `<meta property="og:image:height" content="512" />`,
+    `<meta property="og:image:alt" content="Ingenious hex board game icon" />`,
     `<meta property="og:url" content="${url}" />`,
-    `<meta name="twitter:card" content="summary" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,
     `<meta name="twitter:image" content="${img}" />`,
+    `<meta name="twitter:image:alt" content="Ingenious hex board game icon" />`,
   ].join('\n    ')
 }

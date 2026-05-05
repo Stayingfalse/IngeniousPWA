@@ -72,7 +72,7 @@ export default function LobbyScreen({ onNavigate }: LobbyScreenProps) {
   const handleCopyInviteLink = async () => {
     if (!lobbyId) return
     try {
-      const url = `${location.origin}/?join=${lobbyId}`
+      const url = `${location.origin}/${lobbyId}`
       await navigator.clipboard.writeText(url)
       setCopiedLink(true)
       setTimeout(() => setCopiedLink(false), 2000)

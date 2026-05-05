@@ -63,11 +63,13 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
 
   const targetUrl: string = (event.notification.data as { url?: string })?.url ?? '/'
 
-  // Extract the lobby ID from the ?join= query param so we can tell an
-  // already-open window to navigate directly to that game.
+  // Extract the lobby ID from the notification URL.
+  // Supports both the clean path format (/ABCDEF) and the legacy query param (?join=ABCDEF).
   let lobbyId: string | null = null
   try {
-    lobbyId = new URL(targetUrl, self.location.origin).searchParams.get('join')
+    const parsed = new URL(targetUrl, self.location.origin)
+    const pathMatch = /^\/([A-Z0-9]{6})$/i.exec(parsed.pathname)
+    lobbyId = pathMatch?.[1] ?? parsed.searchParams.get('join')
   } catch {
     // ignore malformed URLs
   }
