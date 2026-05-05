@@ -278,6 +278,18 @@ export default function App() {
     prevConnectedRef.current = connected
   }, [connected, lobbyId, myPlayerName, screen])
 
+  // Keep the address bar in sync with the current screen/lobby so players
+  // can copy a shareable link directly from the URL bar at any time.
+  //   • lobby or game screen  →  /<lobbyId>  (e.g. /ELCCQP)
+  //   • home screen           →  /
+  useEffect(() => {
+    if (screen !== 'home' && lobbyId) {
+      window.history.replaceState(null, '', `/${lobbyId}`)
+    } else if (screen === 'home') {
+      window.history.replaceState(null, '', '/')
+    }
+  }, [screen, lobbyId])
+
   const handleNavigateHome = () => {
     const { lobbyState: currentLobbyState, isSpectating } = useLobbyStore.getState()
     const currentTurnMode = currentLobbyState?.turnMode
