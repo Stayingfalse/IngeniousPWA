@@ -262,11 +262,10 @@ export default async function apiRoutes(fastify: FastifyInstance) {
 
     const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id, player.id)
 
-    // Compute win streak from ordered results
+    // Compute win streak from ordered results (single forward pass)
     const resultRows = playerStreakQueries.getResults.all(player.id)
-    let currentWinStreak = 0
-    let bestWinStreak = 0
     let streak = 0
+    let bestWinStreak = 0
     for (const r of resultRows) {
       if (r.winner_id === player.id) {
         streak++
@@ -275,14 +274,8 @@ export default async function apiRoutes(fastify: FastifyInstance) {
         streak = 0
       }
     }
-    // Count backwards from most recent for current streak
-    for (let i = resultRows.length - 1; i >= 0; i--) {
-      if (resultRows[i].winner_id === player.id) {
-        currentWinStreak++
-      } else {
-        break
-      }
-    }
+    // After the forward pass, 'streak' is the current run of wins at the end
+    const currentWinStreak = streak
 
     const opponentRow = playerOpponentQueries.getMostCommon.get(player.id)
 

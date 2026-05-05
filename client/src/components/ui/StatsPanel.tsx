@@ -31,6 +31,24 @@ function winPct(wins: number, total: number): string {
   return `${Math.round((wins / total) * 100)}%`
 }
 
+interface AiDifficultyRowProps {
+  label: string
+  wins: number
+  total: number
+}
+
+function AiDifficultyRow({ label, wins, total }: AiDifficultyRowProps) {
+  if (total === 0) return null
+  return (
+    <div className="flex justify-between text-xs text-gray-400">
+      <span>{label}</span>
+      <span className="font-mono text-white">
+        {winPct(wins, total)} <span className="text-gray-500">({total}g)</span>
+      </span>
+    </div>
+  )
+}
+
 export default function StatsPanel({ playerId }: { playerId: string | null }) {
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null)
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null)
@@ -150,24 +168,9 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
                   {(globalStats.aiTotalEasy + globalStats.aiTotalMedium + globalStats.aiTotalHard) > 0 && (
                     <>
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Win % vs AI difficulty</p>
-                      {globalStats.aiTotalEasy > 0 && (
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>😊 Easy</span>
-                          <span className="font-mono text-white">{winPct(globalStats.aiWinsEasy, globalStats.aiTotalEasy)} <span className="text-gray-500">({globalStats.aiTotalEasy}g)</span></span>
-                        </div>
-                      )}
-                      {globalStats.aiTotalMedium > 0 && (
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>🤔 Medium</span>
-                          <span className="font-mono text-white">{winPct(globalStats.aiWinsMedium, globalStats.aiTotalMedium)} <span className="text-gray-500">({globalStats.aiTotalMedium}g)</span></span>
-                        </div>
-                      )}
-                      {globalStats.aiTotalHard > 0 && (
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>😤 Hard</span>
-                          <span className="font-mono text-white">{winPct(globalStats.aiWinsHard, globalStats.aiTotalHard)} <span className="text-gray-500">({globalStats.aiTotalHard}g)</span></span>
-                        </div>
-                      )}
+                      <AiDifficultyRow label="😊 Easy" wins={globalStats.aiWinsEasy} total={globalStats.aiTotalEasy} />
+                      <AiDifficultyRow label="🤔 Medium" wins={globalStats.aiWinsMedium} total={globalStats.aiTotalMedium} />
+                      <AiDifficultyRow label="😤 Hard" wins={globalStats.aiWinsHard} total={globalStats.aiTotalHard} />
                     </>
                   )}
                 </>
@@ -203,24 +206,9 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
               {(globalStats.aiTotalEasy + globalStats.aiTotalMedium + globalStats.aiTotalHard) > 0 && (
                 <>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Win % vs AI difficulty</p>
-                  {globalStats.aiTotalEasy > 0 && (
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>😊 Easy</span>
-                      <span className="font-mono text-white">{winPct(globalStats.aiWinsEasy, globalStats.aiTotalEasy)} <span className="text-gray-500">({globalStats.aiTotalEasy}g)</span></span>
-                    </div>
-                  )}
-                  {globalStats.aiTotalMedium > 0 && (
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>🤔 Medium</span>
-                      <span className="font-mono text-white">{winPct(globalStats.aiWinsMedium, globalStats.aiTotalMedium)} <span className="text-gray-500">({globalStats.aiTotalMedium}g)</span></span>
-                    </div>
-                  )}
-                  {globalStats.aiTotalHard > 0 && (
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>😤 Hard</span>
-                      <span className="font-mono text-white">{winPct(globalStats.aiWinsHard, globalStats.aiTotalHard)} <span className="text-gray-500">({globalStats.aiTotalHard}g)</span></span>
-                    </div>
-                  )}
+                  <AiDifficultyRow label="😊 Easy" wins={globalStats.aiWinsEasy} total={globalStats.aiTotalEasy} />
+                  <AiDifficultyRow label="🤔 Medium" wins={globalStats.aiWinsMedium} total={globalStats.aiTotalMedium} />
+                  <AiDifficultyRow label="😤 Hard" wins={globalStats.aiWinsHard} total={globalStats.aiTotalHard} />
                 </>
               )}
             </div>
