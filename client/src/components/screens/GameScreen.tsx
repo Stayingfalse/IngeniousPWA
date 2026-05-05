@@ -196,53 +196,58 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
           myPlayerId={myPlayerId ?? ''}
           playerNames={playerNames}
         />
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          {/* Spectator badge */}
-          {isSpectating && (
-            <span className="text-sky-400 font-medium flex items-center gap-1" title="You are watching this game as a spectator">
-              👁 Spectating
-            </span>
-          )}
-          {/* Real-time countdown */}
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          {/* Real-time countdown — always visible */}
           {secondsLeft !== null && !isAsyncMode && (
             <span className={`font-mono font-bold ${timerColor}`} title="Time left for this turn">
               {secondsLeft}s
             </span>
           )}
-          {/* Async mode badge */}
-          {isAsyncMode && !isSpectating && (
-            <span className="text-blue-400 text-xs" title={isVsAI ? 'vs Computer — no time limit' : 'Turn-based game — no time limit'}>
-              {isVsAI ? '🤖 Computer' : '☁ Turn-based'}
-            </span>
-          )}
-          {/* Push notification toggle (async only, players only) */}
-          {isAsyncMode && !isSpectating && isPushSupported() && pushPermission !== 'denied' && (
+
+          {/* Items always visible on md+, hidden on small */}
+          <div className="hidden md:flex items-center gap-3">
+            {/* Spectator badge */}
+            {isSpectating && (
+              <span className="text-sky-400 font-medium flex items-center gap-1" title="You are watching this game as a spectator">
+                👁 Spectating
+              </span>
+            )}
+            {/* Async mode badge */}
+            {isAsyncMode && !isSpectating && (
+              <span className="text-blue-400 text-xs" title={isVsAI ? 'vs Computer — no time limit' : 'Turn-based game — no time limit'}>
+                {isVsAI ? '🤖 Computer' : '☁ Turn-based'}
+              </span>
+            )}
+            {/* Push notification toggle (async only, players only) */}
+            {isAsyncMode && !isSpectating && isPushSupported() && pushPermission !== 'denied' && (
+              <button
+                onClick={pushSubscribed ? handleDisableNotifications : handleEnableNotifications}
+                disabled={pushLoading}
+                title={pushSubscribed ? 'Disable turn notifications' : 'Enable turn notifications'}
+                className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                  pushSubscribed
+                    ? 'border-blue-500 text-blue-400 hover:border-red-400 hover:text-red-400'
+                    : 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
+                } ${pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {pushSubscribed ? '🔔 On' : '🔕 Notify'}
+              </button>
+            )}
+            <span>{gameState?.tileBagCount ?? 0} tiles left</span>
+            {/* Colour Blind Mode toggle */}
             <button
-              onClick={pushSubscribed ? handleDisableNotifications : handleEnableNotifications}
-              disabled={pushLoading}
-              title={pushSubscribed ? 'Disable turn notifications' : 'Enable turn notifications'}
+              onClick={toggleColourBlindMode}
+              title={colourBlindMode ? 'Disable Colour Blind Mode' : 'Enable Colour Blind Mode'}
               className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-                pushSubscribed
-                  ? 'border-blue-500 text-blue-400 hover:border-red-400 hover:text-red-400'
-                  : 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
-              } ${pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                colourBlindMode
+                  ? 'border-yellow-400 text-yellow-300 hover:border-yellow-300'
+                  : 'border-gray-600 text-gray-400 hover:border-yellow-400 hover:text-yellow-300'
+              }`}
             >
-              {pushSubscribed ? '🔔 On' : '🔕 Notify'}
+              {colourBlindMode ? '◑ CBM' : '◑'}
             </button>
-          )}
-          <span>{gameState?.tileBagCount ?? 0} tiles left</span>
-          {/* Colour Blind Mode toggle */}
-          <button
-            onClick={toggleColourBlindMode}
-            title={colourBlindMode ? 'Disable Colour Blind Mode' : 'Enable Colour Blind Mode'}
-            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-              colourBlindMode
-                ? 'border-yellow-400 text-yellow-300 hover:border-yellow-300'
-                : 'border-gray-600 text-gray-400 hover:border-yellow-400 hover:text-yellow-300'
-            }`}
-          >
-            {colourBlindMode ? '◑ CBM' : '◑'}
-          </button>
+          </div>
+
           {/* Spectators get a plain Leave button; players get the forfeit-confirm flow */}
           {isSpectating ? (
             <button
@@ -261,6 +266,67 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
               Leave
             </button>
           )}
+
+          {/* Burger menu — small screens only */}
+          <div className="relative md:hidden">
+            <button
+              onClick={() => setShowHeaderMenu(m => !m)}
+              title="More options"
+              className="text-gray-400 hover:text-white transition-colors px-1.5 py-0.5 rounded hover:bg-white/10 text-base leading-none"
+            >
+              ☰
+            </button>
+            {showHeaderMenu && (
+              <>
+                {/* Transparent backdrop to close on outside click */}
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setShowHeaderMenu(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 bg-[#1a1833] border border-[#312e6b] rounded-lg p-3 flex flex-col gap-2.5 z-30 min-w-[170px] shadow-xl text-xs text-gray-400">
+                  {/* Spectator badge */}
+                  {isSpectating && (
+                    <span className="text-sky-400 font-medium flex items-center gap-1">
+                      👁 Spectating
+                    </span>
+                  )}
+                  {/* Async mode badge */}
+                  {isAsyncMode && !isSpectating && (
+                    <span className="text-blue-400">
+                      {isVsAI ? '🤖 vs Computer' : '☁ Turn-based'}
+                    </span>
+                  )}
+                  {/* Push notification toggle */}
+                  {isAsyncMode && !isSpectating && isPushSupported() && pushPermission !== 'denied' && (
+                    <button
+                      onClick={() => { (pushSubscribed ? handleDisableNotifications() : handleEnableNotifications()); setShowHeaderMenu(false) }}
+                      disabled={pushLoading}
+                      className={`text-left px-2 py-1 rounded border transition-colors ${
+                        pushSubscribed
+                          ? 'border-blue-500 text-blue-400 hover:border-red-400 hover:text-red-400'
+                          : 'border-gray-600 text-gray-400 hover:border-blue-400 hover:text-blue-400'
+                      } ${pushLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {pushSubscribed ? '🔔 Notifications On' : '🔕 Enable Notifications'}
+                    </button>
+                  )}
+                  {/* Tiles left */}
+                  <span>{gameState?.tileBagCount ?? 0} tiles left</span>
+                  {/* Colour Blind Mode toggle */}
+                  <button
+                    onClick={() => { toggleColourBlindMode(); setShowHeaderMenu(false) }}
+                    className={`text-left px-2 py-1 rounded border transition-colors ${
+                      colourBlindMode
+                        ? 'border-yellow-400 text-yellow-300 hover:border-yellow-300'
+                        : 'border-gray-600 text-gray-400 hover:border-yellow-400 hover:text-yellow-300'
+                    }`}
+                  >
+                    {colourBlindMode ? '◑ Colour Blind: On' : '◑ Colour Blind: Off'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -321,7 +387,13 @@ export default function GameScreen({ onNavigateHome }: { onNavigateHome: () => v
         </div>
       </div>
 
-      {showTutorial && <TutorialOverlay onClose={() => setShowTutorial(false)} />}
+      {showTutorial && (
+        <TutorialOverlay
+          onClose={() => setShowTutorial(false)}
+          colourBlindMode={colourBlindMode}
+          onToggleColourBlindMode={toggleColourBlindMode}
+        />
+      )}
 
       {/* Rack swap modal — shown at end of turn when swap is available */}
       {showSwapPrompt && !isSpectating && (() => {
