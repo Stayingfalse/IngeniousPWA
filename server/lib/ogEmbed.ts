@@ -100,7 +100,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     const winner = result?.winner_name ?? 'Someone'
     return {
       title: `🏆 ${winner} just won an Ingenious game!`,
-      description: `${modeLabel} · ${playerNames.join(' vs ')} · Can you beat them? Play now →`,
+      description: `${modeLabel} · ${playerNames.join(' vs ')}\nCan you beat them? Play now →`,
       imageUrl: iconUrl,
     }
   }
