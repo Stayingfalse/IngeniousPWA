@@ -89,7 +89,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
       })
     return {
       title: `🔥 Ingenious in progress — spectate now!`,
-      description: `${modeLabel} · ${playerNames.join(' vs ')} · ${scoreLines.join(' | ')}`,
+      description: `${modeLabel} · ${playerNames.join(' vs ')}\n${scoreLines.join('\n')}`,
       imageUrl: iconUrl,
     }
   }
@@ -133,7 +133,7 @@ export function renderOgTags(meta: OgMeta, pageUrl: string): string {
     `<meta property="og:image:height" content="512" />`,
     `<meta property="og:image:alt" content="Ingenious hex board game icon" />`,
     `<meta property="og:url" content="${url}" />`,
-    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:card" content="summary" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,
     `<meta name="twitter:image" content="${img}" />`,
