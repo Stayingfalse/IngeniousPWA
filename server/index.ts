@@ -8,6 +8,7 @@ import fs from 'fs'
 import apiRoutes from './routes/api'
 import websocketRoutes from './routes/websocket'
 import { lobbyManager } from './services/lobbyManager'
+import { buildOgMeta, buildDefaultOgMeta, renderOgTags } from './lib/ogEmbed'
 
 const PORT = parseInt(process.env.PORT || '3000', 10)
 const HOST = process.env.HOST || '0.0.0.0'
@@ -39,9 +40,30 @@ async function start() {
       prefix: '/',
     })
 
-    // SPA fallback
-    fastify.setNotFoundHandler((_, reply) => {
-      reply.sendFile('index.html')
+    // SPA fallback — inject OG meta tags when a ?join= code is present so that
+    // social-media crawlers (Discord, Slack, Twitter, etc.) receive rich embeds.
+    fastify.setNotFoundHandler((request, reply) => {
+      const indexPath = path.join(CLIENT_DIST, 'index.html')
+      let html = fs.readFileSync(indexPath, 'utf-8')
+
+      const reqUrl = request.url ?? '/'
+      const qIdx = reqUrl.indexOf('?')
+      const qs = qIdx >= 0 ? reqUrl.slice(qIdx + 1) : ''
+      const params = new URLSearchParams(qs)
+      const joinCode = params.get('join')
+
+      const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').replace(/\/$/, '')
+      const pageUrl = PUBLIC_URL + reqUrl
+
+      const meta = joinCode
+        ? buildOgMeta(joinCode, PUBLIC_URL)
+        : buildDefaultOgMeta(PUBLIC_URL)
+
+      const ogTags = renderOgTags(meta, pageUrl)
+      // Inject immediately before </head> so they override any static defaults
+      html = html.replace('</head>', `    ${ogTags}\n  </head>`)
+
+      reply.type('text/html').send(html)
     })
   }
 
