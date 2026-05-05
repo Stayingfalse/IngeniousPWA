@@ -325,7 +325,7 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const player = playerQueries.findByToken.get(token)
     if (!player) return reply.status(401).send({ error: 'Unauthorized' })
 
-    const rows = playerHistoryQueries.getForPlayer.all(player.id)
+    const rows = playerHistoryQueries.getForPlayer.all({ playerId: player.id })
     const history: PlayerHistoryEntry[] = rows.map(r => {
       const rawReason = r.win_reason
       const winReason: PlayerHistoryEntry['winReason'] =
