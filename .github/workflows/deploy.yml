@@ -1,0 +1,19 @@
+name: Deploy on Merge
+
+on:
+  pull_request:
+    branches: [main, master]
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-deploy:
+    name: Trigger Deployment
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger deploy webhook
+        run: curl -fsSL -o /dev/null "${{ secrets.DEPLOY_TRIGGER }}"
