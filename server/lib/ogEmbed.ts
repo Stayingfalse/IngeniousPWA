@@ -45,7 +45,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     if (result) {
       const winner = result.winner_name ?? 'Someone'
       return {
-        title: `🏆 ${escapeHtml(winner)} just won an Ingenious game!`,
+        title: `🏆 ${winner} just won an Ingenious game!`,
         description: `This game has ended after ${result.move_count ?? '?'} moves. Start your own and challenge a friend!`,
         imageUrl: iconUrl,
       }
@@ -72,7 +72,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     const spotsLeft = lobby.maxPlayers - filled
     const urgency = spotsLeft === 1 ? '1 spot left!' : `${spotsLeft} spots left`
     return {
-      title: `🎯 Join ${escapeHtml(hostName)}'s Ingenious game!`,
+      title: `🎯 Join ${hostName}'s Ingenious game!`,
       description: `${modeLabel} · ${slots} players · ${urgency} — tap to join now`,
       imageUrl: iconUrl,
     }
@@ -99,7 +99,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     const result = gameResultQueries.findByLobby.get(code)
     const winner = result?.winner_name ?? 'Someone'
     return {
-      title: `🏆 ${escapeHtml(winner)} just won an Ingenious game!`,
+      title: `🏆 ${winner} just won an Ingenious game!`,
       description: `${modeLabel} · ${playerNames.join(' vs ')} · Can you beat them? Play now →`,
       imageUrl: iconUrl,
     }
