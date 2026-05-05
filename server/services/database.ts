@@ -213,6 +213,13 @@ export const gameResultQueries = {
      ORDER BY gr.finished_at DESC
      LIMIT 20`,
   ),
+  findByLobby: db.prepare<[string], GameResultRow>(
+    `SELECT gr.*, p.display_name as winner_name
+     FROM game_results gr
+     LEFT JOIN players p ON gr.winner_id = p.id
+     WHERE gr.lobby_id = ?
+     LIMIT 1`,
+  ),
 }
 
 export const pushSubscriptionQueries = {
