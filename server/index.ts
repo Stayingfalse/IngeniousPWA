@@ -1,4 +1,4 @@
-import Fastify from 'fastify'
+import Fastify, { type FastifyReply } from 'fastify'
 import fastifyCookie from '@fastify/cookie'
 import fastifyStatic from '@fastify/static'
 import fastifyWebsocket from '@fastify/websocket'
@@ -36,19 +36,12 @@ async function start() {
 
   // Serve static client files if dist exists
   if (fs.existsSync(CLIENT_DIST)) {
-    await fastify.register(fastifyStatic, {
-      root: CLIENT_DIST,
-      prefix: '/',
-    })
-
     // Cache index.html once at startup; it only changes on redeployment.
     const indexPath = path.join(CLIENT_DIST, 'index.html')
     const indexTemplate = fs.readFileSync(indexPath, 'utf-8')
 
-    // SPA fallback — inject OG meta tags when a ?join= code is present so that
-    // social-media crawlers (Discord, Slack, Twitter, etc.) receive rich embeds.
-    fastify.setNotFoundHandler((request, reply) => {
-      const reqUrl = request.url ?? '/'
+    // Helper: build and inject OG tags into the index.html template.
+    const serveIndexWithOgTags = (reqUrl: string, reply: FastifyReply) => {
       const qIdx = reqUrl.indexOf('?')
       const qs = qIdx >= 0 ? reqUrl.slice(qIdx + 1) : ''
       const params = new URLSearchParams(qs)
@@ -64,10 +57,28 @@ async function start() {
         : buildDefaultOgMeta(PUBLIC_URL)
 
       const ogTags = renderOgTags(meta, pageUrl)
-      // Inject immediately before </head> so they override any static defaults
+      // Inject immediately before </head>
       const html = indexTemplate.replace('</head>', `    ${ogTags}\n  </head>`)
 
       reply.type('text/html').send(html)
+    }
+
+    // Explicit GET / handler registered BEFORE fastifyStatic so that
+    // social-media crawlers (Discord, Slack, etc.) hitting /?join=CODE
+    // receive rich OG embeds. fastifyStatic would serve the static
+    // index.html directly, bypassing OG injection entirely.
+    fastify.get('/', (request, reply) => {
+      serveIndexWithOgTags(request.url ?? '/', reply)
+    })
+
+    await fastify.register(fastifyStatic, {
+      root: CLIENT_DIST,
+      prefix: '/',
+    })
+
+    // SPA fallback for deep-link paths (e.g. /some-path): inject OG tags.
+    fastify.setNotFoundHandler((request, reply) => {
+      serveIndexWithOgTags(request.url ?? '/', reply)
     })
   }
 
