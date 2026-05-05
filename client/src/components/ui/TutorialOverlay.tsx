@@ -248,6 +248,7 @@ interface TutorialStep {
   body: string
   emoji: string
   interactive?: boolean
+  cbmChoice?: boolean
 }
 
 const STEPS: TutorialStep[] = [
@@ -292,17 +293,26 @@ const STEPS: TutorialStep[] = [
     body: 'Win by reaching 18 in all six colours, or by having the highest minimum colour score when the tile bag runs out. Good luck!',
     emoji: '🏆',
   },
+  {
+    title: 'Colour Blind Mode',
+    body: '',
+    emoji: '◑',
+    cbmChoice: true,
+  },
 ]
 
 // ── TutorialOverlay ───────────────────────────────────────────────────────────
 
 interface TutorialOverlayProps {
   onClose: () => void
+  colourBlindMode: boolean
+  onToggleColourBlindMode: () => void
 }
 
 const INTERACTIVE_STEP_INDEX = STEPS.findIndex(s => s.interactive)
+const CBM_STEP_INDEX = STEPS.findIndex(s => s.cbmChoice)
 
-export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
+export default function TutorialOverlay({ onClose, colourBlindMode, onToggleColourBlindMode }: TutorialOverlayProps) {
   const [step, setStep] = useState(0)
   const [interactiveDone, setInteractiveDone] = useState(false)
 
@@ -314,6 +324,7 @@ export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
   const current = STEPS[step]
   const isLast = step === STEPS.length - 1
   const isInteractive = current.interactive === true
+  const isCbmChoice = current.cbmChoice === true
   const canAdvance = !isInteractive || interactiveDone
 
   const handleDone = () => {
@@ -340,6 +351,44 @@ export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
           <h2 className="text-lg font-bold text-white mb-2">{current.title}</h2>
           {isInteractive ? (
             <MiniBoard onPlaced={() => setInteractiveDone(true)} />
+          ) : isCbmChoice ? (
+            <div className="flex flex-col gap-3 text-sm">
+              <p className="text-gray-300 leading-relaxed">
+                Colour Blind Mode adds letter labels to every tile and hex colour, making it easier to play without relying on colour alone.
+              </p>
+              <p className="text-gray-400 leading-relaxed">
+                It is currently{' '}
+                <span className={`font-semibold ${colourBlindMode ? 'text-yellow-300' : 'text-gray-300'}`}>
+                  {colourBlindMode ? 'ON' : 'OFF'}
+                </span>
+                . Would you like to keep it that way?
+              </p>
+              <div className="flex gap-2 mt-1">
+                <button
+                  onClick={() => { if (!colourBlindMode) onToggleColourBlindMode() }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    colourBlindMode
+                      ? 'bg-yellow-500/20 border-yellow-400 text-yellow-300'
+                      : 'border-gray-600 text-gray-400 hover:border-yellow-400 hover:text-yellow-300'
+                  }`}
+                >
+                  ◑ Keep On
+                </button>
+                <button
+                  onClick={() => { if (colourBlindMode) onToggleColourBlindMode() }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    !colourBlindMode
+                      ? 'bg-gray-500/20 border-gray-300 text-gray-200'
+                      : 'border-gray-600 text-gray-400 hover:border-gray-300 hover:text-gray-200'
+                  }`}
+                >
+                  Turn Off
+                </button>
+              </div>
+              <p className="text-gray-500 text-xs leading-relaxed mt-1">
+                You can always change this later using the <span className="font-mono text-gray-300">◑</span> button in the top bar.
+              </p>
+            </div>
           ) : (
             <p className="text-gray-300 text-sm leading-relaxed">{current.body}</p>
           )}
@@ -347,7 +396,7 @@ export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
 
         {/* Navigation */}
         <div className="flex gap-2">
-          {step > 0 && (
+          {step > 0 && !isCbmChoice && (
             <button
               onClick={() => setStep(s => s - 1)}
               className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:text-white bg-[#0f0e17] border border-[#312e6b] transition-colors"
@@ -355,7 +404,14 @@ export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
               Back
             </button>
           )}
-          {!isLast ? (
+          {isCbmChoice ? (
+            <button
+              onClick={handleDone}
+              className="flex-1 py-2 rounded-lg text-sm font-medium bg-green-600 hover:bg-green-700 text-white transition-colors"
+            >
+              Let's Play!
+            </button>
+          ) : !isLast ? (
             <button
               onClick={() => { if (canAdvance) setStep(s => s + 1) }}
               disabled={!canAdvance}
@@ -377,12 +433,14 @@ export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
           )}
         </div>
 
-        <button
-          onClick={handleDone}
-          className="w-full mt-2 text-xs text-gray-500 hover:text-gray-300 transition-colors py-1"
-        >
-          Skip tutorial
-        </button>
+        {!isCbmChoice && (
+          <button
+            onClick={handleDone}
+            className="w-full mt-2 text-xs text-gray-500 hover:text-gray-300 transition-colors py-1"
+          >
+            Skip tutorial
+          </button>
+        )}
       </div>
     </div>
   )
