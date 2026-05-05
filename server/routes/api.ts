@@ -344,7 +344,7 @@ export default async function apiRoutes(fastify: FastifyInstance) {
         won: r.winner_id === player.id,
         winnerName: r.winner_name ?? null,
         winReason,
-        opponentNames: r.opponent_names ? r.opponent_names.split(',').filter(Boolean) : [],
+        opponentNames: r.opponent_names ? r.opponent_names.split(',').map(s => s.trim()).filter(s => s.length > 0) : [],
         moveCount: r.move_count,
         durationSeconds: r.duration_seconds,
         finishedAt: r.finished_at,
