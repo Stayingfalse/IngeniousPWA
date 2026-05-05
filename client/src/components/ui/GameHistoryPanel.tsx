@@ -29,9 +29,9 @@ export default function GameHistoryPanel({ playerId }: { playerId: string | null
     if (!expanded || !playerId || loaded) return
     setLoading(true)
     fetch('/api/player/history', { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((d: { history: PlayerHistoryEntry[] }) => {
-        setHistory(d.history)
+        setHistory(Array.isArray(d.history) ? d.history : [])
         setLoaded(true)
       })
       .catch(() => setLoaded(true))
