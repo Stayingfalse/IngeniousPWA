@@ -95,6 +95,10 @@ export type PlayerStats = {
   gamesWon: number
   uniqueOpponents: number
   vsComputerGames: number
+  currentWinStreak: number
+  bestWinStreak: number
+  mostCommonOpponentName: string | null
+  mostCommonOpponentGames: number
 }
 
 export type GlobalStats = {
@@ -105,6 +109,12 @@ export type GlobalStats = {
   wonByAllEighteen: number
   wonByNoMoves: number
   wonByForfeit: number
+  aiWinsEasy: number
+  aiTotalEasy: number
+  aiWinsMedium: number
+  aiTotalMedium: number
+  aiWinsHard: number
+  aiTotalHard: number
 }
 
 export type ClientMessage =

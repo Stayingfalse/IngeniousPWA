@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { v4 as uuidv4 } from 'uuid'
-import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries } from '../services/database'
+import { playerQueries, lobbyQueries, lobbyPlayerQueries, gameResultQueries, pushSubscriptionQueries, vapidKeys, playerGameQueries, playerStatQueries, globalStatQueries, playerStreakQueries, playerOpponentQueries } from '../services/database'
 import { lobbyManager } from '../services/lobbyManager'
 import type { TurnMode, AiDifficulty, ActiveGameSummary, PlayerStats, GlobalStats, OpenLobbySummary } from '@ingenious/shared'
 import db from '../services/database'
@@ -261,11 +261,40 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     if (!player) return reply.status(401).send({ error: 'Unauthorized' })
 
     const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id, player.id)
+
+    // Compute win streak from ordered results
+    const resultRows = playerStreakQueries.getResults.all(player.id)
+    let currentWinStreak = 0
+    let bestWinStreak = 0
+    let streak = 0
+    for (const r of resultRows) {
+      if (r.winner_id === player.id) {
+        streak++
+        if (streak > bestWinStreak) bestWinStreak = streak
+      } else {
+        streak = 0
+      }
+    }
+    // Count backwards from most recent for current streak
+    for (let i = resultRows.length - 1; i >= 0; i--) {
+      if (resultRows[i].winner_id === player.id) {
+        currentWinStreak++
+      } else {
+        break
+      }
+    }
+
+    const opponentRow = playerOpponentQueries.getMostCommon.get(player.id)
+
     const stats: PlayerStats = {
       gamesPlayed: row?.games_played ?? 0,
       gamesWon: row?.games_won ?? 0,
       uniqueOpponents: row?.unique_opponents ?? 0,
       vsComputerGames: row?.vs_computer_games ?? 0,
+      currentWinStreak,
+      bestWinStreak,
+      mostCommonOpponentName: opponentRow?.name ?? null,
+      mostCommonOpponentGames: opponentRow?.games ?? 0,
     }
     return reply.send({ stats })
   })
@@ -283,6 +312,12 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       wonByAllEighteen: row?.won_by_all_eighteen ?? 0,
       wonByNoMoves: row?.won_by_no_moves ?? 0,
       wonByForfeit: row?.won_by_forfeit ?? 0,
+      aiWinsEasy: row?.wins_vs_easy ?? 0,
+      aiTotalEasy: row?.total_vs_easy ?? 0,
+      aiWinsMedium: row?.wins_vs_medium ?? 0,
+      aiTotalMedium: row?.total_vs_medium ?? 0,
+      aiWinsHard: row?.wins_vs_hard ?? 0,
+      aiTotalHard: row?.total_vs_hard ?? 0,
     }
     return reply.send({ stats })
   })

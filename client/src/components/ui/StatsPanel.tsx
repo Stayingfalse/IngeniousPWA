@@ -26,6 +26,11 @@ function StatBar({ label, value, max, color }: StatBarProps) {
   )
 }
 
+function winPct(wins: number, total: number): string {
+  if (total === 0) return '–'
+  return `${Math.round((wins / total) * 100)}%`
+}
+
 export default function StatsPanel({ playerId }: { playerId: string | null }) {
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null)
   const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null)
@@ -92,6 +97,18 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
             </div>
           </div>
 
+          {/* Streak row */}
+          {playerStats.bestWinStreak > 0 && (
+            <div className="flex justify-center gap-4 mt-2 text-xs">
+              {playerStats.currentWinStreak > 0 ? (
+                <span className="text-orange-400">🔥 {playerStats.currentWinStreak} win streak</span>
+              ) : (
+                <span className="text-gray-500">No active streak</span>
+              )}
+              <span className="text-gray-500">best: {playerStats.bestWinStreak}</span>
+            </div>
+          )}
+
           {expanded && (
             <div className="mt-4 space-y-2 border-t border-[#312e6b] pt-3">
               <StatBar
@@ -100,6 +117,12 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
                 max={playerStats.gamesPlayed}
                 color="bg-green-500"
               />
+              {playerStats.mostCommonOpponentName && (
+                <p className="text-xs text-gray-400 pt-1">
+                  🏆 Most vs <span className="text-white font-semibold">{playerStats.mostCommonOpponentName}</span>
+                  <span className="text-gray-500"> ({playerStats.mostCommonOpponentGames} games)</span>
+                </p>
+              )}
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Opponents</p>
               <StatBar
                 label="🤖 vs Computer"
@@ -124,6 +147,29 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
                   <StatBar label="🏆 All 18s" value={globalStats.wonByAllEighteen} max={globalStats.totalGames} color="bg-yellow-500" />
                   <StatBar label="🪨 No moves left" value={globalStats.wonByNoMoves} max={globalStats.totalGames} color="bg-orange-500" />
                   <StatBar label="🏳 Forfeit" value={globalStats.wonByForfeit} max={globalStats.totalGames} color="bg-red-500" />
+                  {(globalStats.aiTotalEasy + globalStats.aiTotalMedium + globalStats.aiTotalHard) > 0 && (
+                    <>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Win % vs AI difficulty</p>
+                      {globalStats.aiTotalEasy > 0 && (
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>😊 Easy</span>
+                          <span className="font-mono text-white">{winPct(globalStats.aiWinsEasy, globalStats.aiTotalEasy)} <span className="text-gray-500">({globalStats.aiTotalEasy}g)</span></span>
+                        </div>
+                      )}
+                      {globalStats.aiTotalMedium > 0 && (
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>🤔 Medium</span>
+                          <span className="font-mono text-white">{winPct(globalStats.aiWinsMedium, globalStats.aiTotalMedium)} <span className="text-gray-500">({globalStats.aiTotalMedium}g)</span></span>
+                        </div>
+                      )}
+                      {globalStats.aiTotalHard > 0 && (
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>😤 Hard</span>
+                          <span className="font-mono text-white">{winPct(globalStats.aiWinsHard, globalStats.aiTotalHard)} <span className="text-gray-500">({globalStats.aiTotalHard}g)</span></span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -154,6 +200,29 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
               <StatBar label="🏆 All 18s" value={globalStats.wonByAllEighteen} max={globalStats.totalGames} color="bg-yellow-500" />
               <StatBar label="🪨 No moves left" value={globalStats.wonByNoMoves} max={globalStats.totalGames} color="bg-orange-500" />
               <StatBar label="🏳 Forfeit" value={globalStats.wonByForfeit} max={globalStats.totalGames} color="bg-red-500" />
+              {(globalStats.aiTotalEasy + globalStats.aiTotalMedium + globalStats.aiTotalHard) > 0 && (
+                <>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Win % vs AI difficulty</p>
+                  {globalStats.aiTotalEasy > 0 && (
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>😊 Easy</span>
+                      <span className="font-mono text-white">{winPct(globalStats.aiWinsEasy, globalStats.aiTotalEasy)} <span className="text-gray-500">({globalStats.aiTotalEasy}g)</span></span>
+                    </div>
+                  )}
+                  {globalStats.aiTotalMedium > 0 && (
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>🤔 Medium</span>
+                      <span className="font-mono text-white">{winPct(globalStats.aiWinsMedium, globalStats.aiTotalMedium)} <span className="text-gray-500">({globalStats.aiTotalMedium}g)</span></span>
+                    </div>
+                  )}
+                  {globalStats.aiTotalHard > 0 && (
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>😤 Hard</span>
+                      <span className="font-mono text-white">{winPct(globalStats.aiWinsHard, globalStats.aiTotalHard)} <span className="text-gray-500">({globalStats.aiTotalHard}g)</span></span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
