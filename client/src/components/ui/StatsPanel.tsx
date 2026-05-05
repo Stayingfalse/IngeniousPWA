@@ -116,9 +116,8 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
               {globalStats && globalStats.totalGames > 0 && (
                 <>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Global</p>
-                  <StatBar label="All games" value={globalStats.totalGames} max={globalStats.totalGames} color="bg-purple-500" />
                   <StatBar label="🤖 vs Computer" value={globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-cyan-500" />
-                  <StatBar label="👤 vs Humans" value={globalStats.totalGames - globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-purple-400" />
+                  <StatBar label="👤 vs Humans" value={globalStats.totalGames - globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-purple-500" />
                   <StatBar label="⚡ Real-time" value={globalStats.realtimeGames} max={globalStats.totalGames} color="bg-blue-500" />
                   <StatBar label="☁ Turn-based" value={globalStats.asyncGames} max={globalStats.totalGames} color="bg-indigo-400" />
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">How games end</p>
