@@ -67,13 +67,15 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
   if (lobby.status === 'waiting') {
     const host = lobby.players.find(p => p.id === lobby.hostId)
     const hostName = host?.name ?? 'Someone'
-    const filled = lobby.players.filter(p => p.id !== AI_PLAYER_ID).length
-    const slots = `${filled}/${lobby.maxPlayers}`
-    const spotsLeft = lobby.maxPlayers - filled
-    const urgency = spotsLeft === 1 ? '1 spot left!' : `${spotsLeft} spots left`
+    const humanPlayers = lobby.players.filter(p => p.id !== AI_PLAYER_ID)
+    const emptySeats = lobby.maxPlayers - humanPlayers.length
+    const seatLines = [
+      ...humanPlayers.map(p => `💺 ${p.name}`),
+      ...Array(emptySeats).fill('🪑 . . . Waiting . . .'),
+    ]
     return {
       title: `🎯 Join ${hostName}'s Ingenious game!`,
-      description: `${modeLabel} · ${slots} players · ${urgency} — tap to join now`,
+      description: `${modeLabel}\n${seatLines.join('\n')}`,
       imageUrl: iconUrl,
     }
   }
@@ -89,7 +91,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
       })
     return {
       title: `🔥 Ingenious in progress — spectate now!`,
-      description: `${modeLabel} · ${playerNames.join(' vs ')} · ${scoreLines.join(' | ')}`,
+      description: `${modeLabel} · ${playerNames.join(' vs ')}\n${scoreLines.join('\n')}`,
       imageUrl: iconUrl,
     }
   }
@@ -100,7 +102,7 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
     const winner = result?.winner_name ?? 'Someone'
     return {
       title: `🏆 ${winner} just won an Ingenious game!`,
-      description: `${modeLabel} · ${playerNames.join(' vs ')} · Can you beat them? Play now →`,
+      description: `${modeLabel} · ${playerNames.join(' vs ')}\nCan you beat them? Play now →`,
       imageUrl: iconUrl,
     }
   }
@@ -133,7 +135,7 @@ export function renderOgTags(meta: OgMeta, pageUrl: string): string {
     `<meta property="og:image:height" content="512" />`,
     `<meta property="og:image:alt" content="Ingenious hex board game icon" />`,
     `<meta property="og:url" content="${url}" />`,
-    `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:card" content="summary" />`,
     `<meta name="twitter:title" content="${t}" />`,
     `<meta name="twitter:description" content="${d}" />`,
     `<meta name="twitter:image" content="${img}" />`,
