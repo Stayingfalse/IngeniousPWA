@@ -400,7 +400,7 @@ export const playerHistoryQueries = {
        gr.id,
        gr.lobby_id,
        gr.winner_id,
-       winner_p.display_name AS winner_name,
+       CASE WHEN gr.winner_id = 'ai-computer-player' THEN 'Computer' ELSE winner_p.display_name END AS winner_name,
        gr.move_count,
        gr.duration_seconds,
        gr.finished_at,
@@ -408,7 +408,11 @@ export const playerHistoryQueries = {
        l.turn_mode,
        l.ai_difficulty,
        GROUP_CONCAT(
-         CASE WHEN lp2.player_id != :playerId THEN COALESCE(p2.display_name, 'Unknown') END
+         CASE WHEN lp2.player_id != :playerId THEN
+           CASE WHEN lp2.player_id = 'ai-computer-player' THEN 'Computer'
+                ELSE COALESCE(p2.display_name, 'Unknown')
+           END
+         END
        ) AS opponent_names
      FROM game_results gr
      JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id AND lp.player_id = :playerId

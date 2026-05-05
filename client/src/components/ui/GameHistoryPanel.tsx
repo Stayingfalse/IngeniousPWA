@@ -60,7 +60,11 @@ export default function GameHistoryPanel({ playerId }: { playerId: string | null
           )}
           {!loading && history.map((entry, i) => {
             const opponents = entry.opponentNames.length > 0
-              ? entry.opponentNames.join(', ')
+              ? entry.opponentNames.map(name =>
+                  name === 'Computer' && entry.aiDifficulty
+                    ? `Computer (${entry.aiDifficulty})`
+                    : name
+                ).join(', ')
               : entry.aiDifficulty
                 ? `Computer (${entry.aiDifficulty})`
                 : '—'
