@@ -67,13 +67,15 @@ export function buildOgMeta(joinCode: string, baseUrl: string): OgMeta {
   if (lobby.status === 'waiting') {
     const host = lobby.players.find(p => p.id === lobby.hostId)
     const hostName = host?.name ?? 'Someone'
-    const filled = lobby.players.filter(p => p.id !== AI_PLAYER_ID).length
-    const slots = `${filled}/${lobby.maxPlayers}`
-    const spotsLeft = lobby.maxPlayers - filled
-    const urgency = spotsLeft === 1 ? '1 spot left!' : `${spotsLeft} spots left`
+    const humanPlayers = lobby.players.filter(p => p.id !== AI_PLAYER_ID)
+    const emptySeats = lobby.maxPlayers - humanPlayers.length
+    const seatLines = [
+      ...humanPlayers.map(p => `💺 ${p.name}`),
+      ...Array(emptySeats).fill('🪑 . . . Waiting . . .'),
+    ]
     return {
       title: `🎯 Join ${hostName}'s Ingenious game!`,
-      description: `${modeLabel} · ${slots} players · ${urgency} — tap to join now`,
+      description: `${modeLabel}\n${seatLines.join('\n')}`,
       imageUrl: iconUrl,
     }
   }
