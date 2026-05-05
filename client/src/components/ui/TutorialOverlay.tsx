@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { AxialCoord } from '@ingenious/shared'
 import { allHexes, isAdjacent, key } from '@ingenious/shared'
 
@@ -300,9 +300,16 @@ interface TutorialOverlayProps {
   onClose: () => void
 }
 
+const INTERACTIVE_STEP_INDEX = STEPS.findIndex(s => s.interactive)
+
 export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
   const [step, setStep] = useState(0)
   const [interactiveDone, setInteractiveDone] = useState(false)
+
+  // Reset completion gate whenever the interactive step is (re-)entered
+  useEffect(() => {
+    if (step === INTERACTIVE_STEP_INDEX) setInteractiveDone(false)
+  }, [step])
 
   const current = STEPS[step]
   const isLast = step === STEPS.length - 1
@@ -332,8 +339,7 @@ export default function TutorialOverlay({ onClose }: TutorialOverlayProps) {
           <div className="text-4xl mb-3">{current.emoji}</div>
           <h2 className="text-lg font-bold text-white mb-2">{current.title}</h2>
           {isInteractive ? (
-            // key={step} ensures a fresh MiniBoard each time this step is (re-)visited
-            <MiniBoard key={step} onPlaced={() => setInteractiveDone(true)} />
+            <MiniBoard onPlaced={() => setInteractiveDone(true)} />
           ) : (
             <p className="text-gray-300 text-sm leading-relaxed">{current.body}</p>
           )}
