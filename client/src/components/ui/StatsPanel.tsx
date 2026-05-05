@@ -100,10 +100,25 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
                 max={playerStats.gamesPlayed}
                 color="bg-green-500"
               />
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Opponents</p>
+              <StatBar
+                label="🤖 vs Computer"
+                value={playerStats.vsComputerGames}
+                max={playerStats.gamesPlayed}
+                color="bg-cyan-500"
+              />
+              <StatBar
+                label="👤 vs Humans"
+                value={playerStats.gamesPlayed - playerStats.vsComputerGames}
+                max={playerStats.gamesPlayed}
+                color="bg-purple-500"
+              />
               {globalStats && globalStats.totalGames > 0 && (
                 <>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">Global</p>
                   <StatBar label="All games" value={globalStats.totalGames} max={globalStats.totalGames} color="bg-purple-500" />
+                  <StatBar label="🤖 vs Computer" value={globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-cyan-500" />
+                  <StatBar label="👤 vs Humans" value={globalStats.totalGames - globalStats.vsComputerGames} max={globalStats.totalGames} color="bg-purple-400" />
                   <StatBar label="⚡ Real-time" value={globalStats.realtimeGames} max={globalStats.totalGames} color="bg-blue-500" />
                   <StatBar label="☁ Turn-based" value={globalStats.asyncGames} max={globalStats.totalGames} color="bg-indigo-400" />
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">How games end</p>
@@ -123,18 +138,20 @@ export default function StatsPanel({ playerId }: { playerId: string | null }) {
               <div className="text-xs text-gray-400">Games</div>
             </div>
             <div>
-              <div className="text-xl font-bold text-blue-400">{globalStats.realtimeGames}</div>
-              <div className="text-xs text-gray-400">⚡ Real-time</div>
+              <div className="text-xl font-bold text-cyan-400">{globalStats.vsComputerGames}</div>
+              <div className="text-xs text-gray-400">🤖 vs Computer</div>
             </div>
             <div>
-              <div className="text-xl font-bold text-indigo-400">{globalStats.asyncGames}</div>
-              <div className="text-xs text-gray-400">☁ Turn-based</div>
+              <div className="text-xl font-bold text-purple-400">{globalStats.totalGames - globalStats.vsComputerGames}</div>
+              <div className="text-xs text-gray-400">👤 vs Humans</div>
             </div>
           </div>
 
           {expanded && (
             <div className="space-y-2 border-t border-[#312e6b] pt-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">How games end</p>
+              <StatBar label="⚡ Real-time" value={globalStats.realtimeGames} max={globalStats.totalGames} color="bg-blue-500" />
+              <StatBar label="☁ Turn-based" value={globalStats.asyncGames} max={globalStats.totalGames} color="bg-indigo-400" />
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1">How games end</p>
               <StatBar label="🏆 All 18s" value={globalStats.wonByAllEighteen} max={globalStats.totalGames} color="bg-yellow-500" />
               <StatBar label="🪨 No moves left" value={globalStats.wonByNoMoves} max={globalStats.totalGames} color="bg-orange-500" />
               <StatBar label="🏳 Forfeit" value={globalStats.wonByForfeit} max={globalStats.totalGames} color="bg-red-500" />

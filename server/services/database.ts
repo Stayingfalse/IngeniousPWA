@@ -279,10 +279,11 @@ export interface PlayerStatRow {
   games_played: number
   games_won: number
   unique_opponents: number
+  vs_computer_games: number
 }
 
 export const playerStatQueries = {
-  getForPlayer: db.prepare<[string, string, string], PlayerStatRow>(
+  getForPlayer: db.prepare<[string, string, string, string], PlayerStatRow>(
     `SELECT
        (SELECT COUNT(*) FROM game_results gr
         JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id
@@ -292,7 +293,14 @@ export const playerStatQueries = {
         FROM lobby_players lp1
         JOIN lobby_players lp2 ON lp2.lobby_id = lp1.lobby_id AND lp2.player_id != lp1.player_id
         JOIN game_results gr ON gr.lobby_id = lp1.lobby_id
-        WHERE lp1.player_id = ?) AS unique_opponents`,
+        WHERE lp1.player_id = ?) AS unique_opponents,
+       (SELECT COUNT(*) FROM game_results gr
+        JOIN lobby_players lp ON lp.lobby_id = gr.lobby_id
+        WHERE lp.player_id = ?
+          AND EXISTS (
+            SELECT 1 FROM lobby_players lp_ai
+            WHERE lp_ai.lobby_id = gr.lobby_id AND lp_ai.player_id = 'ai-computer-player'
+          )) AS vs_computer_games`,
   ),
 }
 
@@ -300,6 +308,7 @@ export interface GlobalStatRow {
   total_games: number
   realtime_games: number
   async_games: number
+  vs_computer_games: number
   won_by_all_eighteen: number
   won_by_no_moves: number
   won_by_forfeit: number
@@ -311,6 +320,10 @@ export const globalStatQueries = {
        COUNT(*) AS total_games,
        SUM(CASE WHEN COALESCE(l.turn_mode, 'realtime') = 'realtime' THEN 1 ELSE 0 END) AS realtime_games,
        SUM(CASE WHEN l.turn_mode = 'async' THEN 1 ELSE 0 END) AS async_games,
+       SUM(CASE WHEN EXISTS (
+         SELECT 1 FROM lobby_players lp_ai
+         WHERE lp_ai.lobby_id = gr.lobby_id AND lp_ai.player_id = 'ai-computer-player'
+       ) THEN 1 ELSE 0 END) AS vs_computer_games,
        SUM(CASE WHEN gr.win_reason = 'all_eighteen' THEN 1 ELSE 0 END) AS won_by_all_eighteen,
        SUM(CASE WHEN gr.win_reason = 'no_moves' THEN 1 ELSE 0 END) AS won_by_no_moves,
        SUM(CASE WHEN gr.win_reason = 'forfeit' THEN 1 ELSE 0 END) AS won_by_forfeit

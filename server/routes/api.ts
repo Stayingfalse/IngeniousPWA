@@ -260,11 +260,12 @@ export default async function apiRoutes(fastify: FastifyInstance) {
     const player = playerQueries.findByToken.get(token)
     if (!player) return reply.status(401).send({ error: 'Unauthorized' })
 
-    const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id)
+    const row = playerStatQueries.getForPlayer.get(player.id, player.id, player.id, player.id)
     const stats: PlayerStats = {
       gamesPlayed: row?.games_played ?? 0,
       gamesWon: row?.games_won ?? 0,
       uniqueOpponents: row?.unique_opponents ?? 0,
+      vsComputerGames: row?.vs_computer_games ?? 0,
     }
     return reply.send({ stats })
   })
@@ -278,6 +279,7 @@ export default async function apiRoutes(fastify: FastifyInstance) {
       totalGames: row?.total_games ?? 0,
       realtimeGames: row?.realtime_games ?? 0,
       asyncGames: row?.async_games ?? 0,
+      vsComputerGames: row?.vs_computer_games ?? 0,
       wonByAllEighteen: row?.won_by_all_eighteen ?? 0,
       wonByNoMoves: row?.won_by_no_moves ?? 0,
       wonByForfeit: row?.won_by_forfeit ?? 0,

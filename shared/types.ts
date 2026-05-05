@@ -94,12 +94,14 @@ export type PlayerStats = {
   gamesPlayed: number
   gamesWon: number
   uniqueOpponents: number
+  vsComputerGames: number
 }
 
 export type GlobalStats = {
   totalGames: number
   realtimeGames: number
   asyncGames: number
+  vsComputerGames: number
   wonByAllEighteen: number
   wonByNoMoves: number
   wonByForfeit: number
