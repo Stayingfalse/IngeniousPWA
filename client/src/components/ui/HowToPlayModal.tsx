@@ -36,14 +36,14 @@ export default function HowToPlayModal({ onClose }: HowToPlayModalProps) {
           <section>
             <h3 className={SECTION_TITLE}>🔷 The Board</h3>
             <p className={SECTION_BODY}>
-              The game is played on a hexagonal grid. Each hex can hold one coloured tile end. There is a special <strong className="text-white">start hex</strong> in the centre; the first tile played each game must cover it.
+              The game is played on a hexagonal grid. Each hex can hold one coloured tile end. There are <strong className="text-white">6 start hexes</strong> located around the edges of the board. Every player must cover a <strong className="text-white">unique</strong> start hex on their very first move — no two players may use the same one.
             </p>
           </section>
 
           <section>
             <h3 className={SECTION_TITLE}>🃏 Tiles</h3>
             <p className={SECTION_BODY}>
-              Each tile has <strong className="text-white">two coloured ends</strong>. On your turn, pick a tile from your rack and place it on any two adjacent empty hexes that are connected to the existing tiles on the board (or the start hex on the first move). You can tap the tile again to <strong className="text-white">flip</strong> its orientation.
+              Each tile has <strong className="text-white">two coloured ends</strong>. On your turn, select a tile from your rack, then tap a valid empty hex for the <strong className="text-white">first colour</strong>, and tap an adjacent empty hex for the <strong className="text-white">second colour</strong>. A popup appears letting you flip the colours, cancel, or confirm the placement.
             </p>
           </section>
 
@@ -79,8 +79,9 @@ export default function HowToPlayModal({ onClose }: HowToPlayModalProps) {
             <h3 className={SECTION_TITLE}>🖥️ Controls</h3>
             <ul className="list-disc list-inside space-y-1 text-gray-300 text-sm">
               <li><strong className="text-white">Select a tile</strong> from your rack at the bottom (or left side in landscape).</li>
-              <li><strong className="text-white">Tap the tile again</strong> to flip it.</li>
-              <li><strong className="text-white">Tap a hex</strong> on the board to place the tile (the second hex is chosen automatically based on your drag/tap direction).</li>
+              <li><strong className="text-white">Tap a hex</strong> on the board to place the first colour end.</li>
+              <li><strong className="text-white">Tap an adjacent hex</strong> to place the second colour end.</li>
+              <li>A <strong className="text-white">popup</strong> appears: flip the colours (⇄), cancel (✕), or confirm (✓) the placement.</li>
             </ul>
           </section>
         </div>
